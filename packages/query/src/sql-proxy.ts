@@ -6,7 +6,7 @@
 export interface R2SqlConfig {
   accountId: string;
   apiToken: string;
-  warehouseName: string;
+  warehouseName: string; // This is the R2 bucket name
 }
 
 export interface R2SqlResult {
@@ -27,7 +27,7 @@ export async function executeQuery(
   sql: string,
   config: R2SqlConfig
 ): Promise<R2SqlResult> {
-  const url = `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/r2/catalogs/${config.warehouseName}/sql`;
+  const url = `https://api.sql.cloudflarestorage.com/api/v1/accounts/${config.accountId}/r2-sql/query/${config.warehouseName}`;
 
   try {
     const response = await fetch(url, {
@@ -36,7 +36,7 @@ export async function executeQuery(
         'Authorization': `Bearer ${config.apiToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ sql }),
+      body: JSON.stringify({ query: sql }),
     });
 
     if (!response.ok) {
@@ -60,11 +60,11 @@ export async function executeQuery(
     const result = await response.json() as {
       success: boolean;
       result?: {
-        data?: unknown[];
-        meta?: {
-          columns?: Array<{ name: string; type: string }>;
-          row_count?: number;
-          execution_time_ms?: number;
+        rows?: unknown[];
+        schema?: Array<{ name: string; descriptor: { type: { name: string } } }>;
+        metrics?: {
+          bytes_scanned?: number;
+          files_scanned?: number;
         };
       };
       errors?: Array<{ message: string }>;
@@ -77,13 +77,18 @@ export async function executeQuery(
       };
     }
 
+    // Map schema to columns format
+    const columns = result.result?.schema?.map(col => ({
+      name: col.name,
+      type: col.descriptor?.type?.name || 'unknown',
+    }));
+
     return {
       success: true,
-      data: result.result?.data || [],
+      data: result.result?.rows || [],
       meta: {
-        columns: result.result?.meta?.columns,
-        rowCount: result.result?.meta?.row_count,
-        executionTime: result.result?.meta?.execution_time_ms,
+        columns,
+        rowCount: result.result?.rows?.length,
       },
     };
   } catch (err) {

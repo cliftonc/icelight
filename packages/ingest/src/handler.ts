@@ -125,11 +125,24 @@ async function handleSingleEventRequest(c: IngestContext, eventType: string) {
  * Send events to pipeline
  */
 async function sendToPipeline(c: IngestContext, events: FlattenedEvent[]) {
+  // Check if pipeline binding exists
+  if (!c.env.PIPELINE) {
+    console.error('PIPELINE binding is not configured');
+    return c.json(
+      { success: false, message: 'Pipeline not configured' } satisfies IngestResponse,
+      500
+    );
+  }
+
+  console.log(`[ingest] Sending ${events.length} events to pipeline`);
+  console.log(`[ingest] First event:`, JSON.stringify(events[0]));
+
   try {
-    await c.env.PIPELINE!.send(events);
+    await c.env.PIPELINE.send(events);
+    console.log(`[ingest] Successfully sent ${events.length} events to pipeline`);
   } catch (err) {
     const error = err as Error;
-    console.error('Pipeline send error:', error.message);
+    console.error('[ingest] Pipeline send error:', error.message, error.stack);
     return c.json(
       { success: false, message: 'Failed to send events to pipeline' } satisfies IngestResponse,
       500

@@ -7,7 +7,7 @@
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "if [ -f wrangler.local.jsonc ]; then wrangler deploy -c wrangler.local.jsonc; else echo 'Error: wrangler.local.jsonc not found. Run pnpm launch first.' && exit 1; fi",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -17,6 +17,6 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240117.0",
     "typescript": "^5.3.3",
-    "wrangler": "^3.114.17"
+    "wrangler": "^4.59.2"
   }
 }

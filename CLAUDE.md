@@ -46,6 +46,26 @@ cdpflare/
 └── docs/                        # Documentation
 ```
 
+## Local Configuration Pattern
+
+**IMPORTANT**: Workers use `wrangler.local.jsonc` for deployment, NOT `wrangler.jsonc`.
+
+- `wrangler.jsonc` - Template/example config (committed to git)
+- `wrangler.local.jsonc` - Actual config with pipeline bindings (gitignored, created by `pnpm launch`)
+
+The `pnpm launch` script creates `wrangler.local.jsonc` files in each worker directory with the correct pipeline/stream IDs for your Cloudflare account.
+
+```bash
+# This creates wrangler.local.jsonc files with your pipeline bindings
+pnpm launch
+
+# Deploy commands automatically use wrangler.local.jsonc
+pnpm deploy:ingest   # Uses workers/event-ingest/wrangler.local.jsonc
+pnpm deploy:query    # Uses workers/query-api/wrangler.local.jsonc
+```
+
+When debugging deployment issues, always check `wrangler.local.jsonc` (not `wrangler.jsonc`) to verify pipeline bindings are configured.
+
 ## Build & Development Commands
 
 ```bash

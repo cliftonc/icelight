@@ -14,6 +14,9 @@ dist/
 # Wrangler
 .wrangler/
 
+# Local wrangler config with environment-specific values
+wrangler.local.jsonc
+
 # IDE
 .idea/
 .vscode/

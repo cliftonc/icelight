@@ -6,14 +6,11 @@
   "compatibility_flags": ["nodejs_compat"],
 
   // Environment variables
-  // These should be set as secrets or in wrangler.toml:
-  // - wrangler secret put CF_API_TOKEN
-  // - wrangler secret put API_TOKEN (optional, for query API auth)
-  "vars": {
-    // CF_ACCOUNT_ID: Set via secret or dashboard
-    // CF_API_TOKEN: Set via secret
-    // WAREHOUSE_NAME: Set in vars or dashboard
-    // API_TOKEN: Optional - if set, requires Bearer auth for queries
-    // ALLOWED_ORIGINS: Optional comma-separated list
-  }
+  // WAREHOUSE_NAME: Set in wrangler.local.jsonc after running pnpm launch
+  //
+  // Secrets (set via wrangler secret put):
+  // - CF_ACCOUNT_ID: Your Cloudflare account ID
+  // - CF_API_TOKEN: API token with R2 SQL permissions
+  // - API_TOKEN (optional): Bearer token for query API auth
+  "vars": {}
 }

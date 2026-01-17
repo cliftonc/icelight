@@ -7,6 +7,8 @@
     "build": "pnpm -r build",
     "dev:ingest": "pnpm --filter event-ingest dev",
     "dev:query": "pnpm --filter query-api dev",
+    "dev:ui": "pnpm --filter query-api dev:ui",
+    "build:ui": "pnpm --filter query-api build:ui",
     "deploy:ingest": "pnpm --filter event-ingest run deploy",
     "deploy:query": "pnpm --filter query-api run deploy",
     "deploy:all": "pnpm -r run deploy",

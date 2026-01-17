@@ -223,6 +223,15 @@ The `pnpm launch` script configures everything automatically. Just deploy:
 pnpm deploy:query
 ```
 
+### Web UI
+
+The Query API includes a web-based Query Explorer and Event Simulator:
+
+**Live Demo**: https://cdpflare-query-api.clifton-cunningham.workers.dev/
+
+- **Query Editor**: Write and execute SQL queries against your analytics data
+- **Event Simulator**: Send test events to your ingestion endpoint using the RudderStack SDK
+
 ### Query Endpoints
 
 | Endpoint | Method | Description |

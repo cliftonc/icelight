@@ -59,56 +59,24 @@ This opens a browser window to authorize wrangler. Once complete, you'll see a s
 
 ### Step 3: Setup Infrastructure
 
-Run the setup script to create R2 bucket, Data Catalog, Stream, Sink, and Pipeline:
+Run the setup script to create all Cloudflare resources and configure workers:
 
 ```bash
 pnpm launch
 ```
 
-The script will:
+You'll be prompted to enter a project name (e.g., `myproject`). The script will:
+
 1. Check you're logged in to Cloudflare
 2. Create an R2 bucket with Data Catalog enabled
 3. Create a Pipeline stream with the event schema
 4. Create a sink to write Parquet files to R2
-5. Create a pipeline with SQL transformation
-6. **Output your Stream ID** - you'll need this for the next step
+5. Create a pipeline connecting the stream to the sink
+6. **Automatically generate `wrangler.local.jsonc`** files for both workers with the correct configuration
 
-### Step 4: Configure the Worker
+> **Note**: The generated `wrangler.local.jsonc` files are gitignored and contain your account-specific pipeline bindings and warehouse settings.
 
-After setup completes, you'll see output like:
-
-```
-┌────────────────────────────────────────────────────────────┐
-│  IMPORTANT: Copy your Stream ID for wrangler.jsonc        │
-└────────────────────────────────────────────────────────────┘
-
-  Stream ID: abc123def456...
-
-  Update workers/event-ingest/wrangler.jsonc:
-  "pipelines": [
-    {
-      "pipeline": "abc123def456...",
-      "binding": "PIPELINE"
-    }
-  ]
-```
-
-Edit `workers/event-ingest/wrangler.jsonc` and uncomment/update the pipelines section with your Stream ID:
-
-```jsonc
-{
-  // ... other config ...
-
-  "pipelines": [
-    {
-      "pipeline": "YOUR_STREAM_ID_HERE",
-      "binding": "PIPELINE"
-    }
-  ]
-}
-```
-
-### Step 5: Deploy Ingest Worker
+### Step 4: Deploy Ingest Worker
 
 ```bash
 pnpm deploy:ingest
@@ -120,7 +88,7 @@ Deployed cdpflare-event-ingest triggers
   https://cdpflare-event-ingest.YOUR-SUBDOMAIN.workers.dev
 ```
 
-### Step 6: Test Ingestion
+### Step 5: Test Ingestion
 
 Send a test event:
 
@@ -132,48 +100,21 @@ curl -X POST https://cdpflare-event-ingest.YOUR-SUBDOMAIN.workers.dev/v1/track \
 
 You should receive: `{"success":true,"count":1}`
 
-### Step 7: Configure Query API (Optional)
+### Step 6: Deploy Query API (Optional)
 
-To query your data via HTTP, set up the Query API worker:
-
-1. **Get your Cloudflare Account ID** from the dashboard URL or Overview page
-
-2. **Create an API Token** at [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) with:
-   - **Account** → Workers R2 Storage → Edit
-
-3. **Configure the worker**:
-
-```bash
-# Set the warehouse name (same as your bucket name with account ID prefix)
-# Format: {ACCOUNT_ID}_{BUCKET_NAME} (e.g., "abc123_cdpflare-data")
-```
-
-Edit `workers/query-api/wrangler.jsonc`:
-```jsonc
-{
-  "vars": {
-    "WAREHOUSE_NAME": "YOUR_ACCOUNT_ID_cdpflare-data"
-  }
-}
-```
-
-4. **Set secrets**:
-
-```bash
-npx wrangler secret put CF_ACCOUNT_ID --config workers/query-api/wrangler.jsonc
-# Enter your account ID when prompted
-
-npx wrangler secret put CF_API_TOKEN --config workers/query-api/wrangler.jsonc
-# Enter your API token when prompted
-```
-
-5. **Deploy**:
+The `pnpm launch` script already configured the Query API worker with the correct warehouse name and set the required secrets (`CF_ACCOUNT_ID` and `CF_API_TOKEN`). Just deploy:
 
 ```bash
 pnpm deploy:query
 ```
 
-### Step 8: Test Query API
+> **Note**: If you skipped the Query API setup during `pnpm launch`, you can run the script again or manually set secrets:
+> ```bash
+> npx wrangler secret put CF_ACCOUNT_ID -c workers/query-api/wrangler.local.jsonc
+> npx wrangler secret put CF_API_TOKEN -c workers/query-api/wrangler.local.jsonc
+> ```
+
+### Step 7: Test Query API
 
 ```bash
 # Check health
@@ -255,8 +196,8 @@ curl -X POST https://YOUR-WORKER.workers.dev/v1/batch \
 ### Enable Authentication
 
 ```bash
-# Set AUTH_ENABLED in wrangler.jsonc vars, then:
-npx wrangler secret put AUTH_TOKEN --config workers/event-ingest/wrangler.jsonc
+# Edit workers/event-ingest/wrangler.local.jsonc and set AUTH_ENABLED to "true", then:
+npx wrangler secret put AUTH_TOKEN -c workers/event-ingest/wrangler.local.jsonc
 # Enter your secret token when prompted
 
 pnpm deploy:ingest
@@ -276,12 +217,9 @@ The Query API worker provides HTTP access to your analytics data via R2 SQL.
 
 ### Deploy Query API
 
-```bash
-# Set required secrets
-npx wrangler secret put CF_ACCOUNT_ID --config workers/query-api/wrangler.jsonc
-npx wrangler secret put CF_API_TOKEN --config workers/query-api/wrangler.jsonc
+The `pnpm launch` script configures everything automatically. Just deploy:
 
-# Deploy
+```bash
 pnpm deploy:query
 ```
 
@@ -338,7 +276,9 @@ curl -X POST https://cdpflare-query-api.YOUR-SUBDOMAIN.workers.dev/query \
 ### Via Wrangler CLI
 
 ```bash
-npx wrangler r2 sql query "YOUR_ACCOUNT_ID_cdpflare-data" \
+# The warehouse name format is: {ACCOUNT_ID}_{BUCKET_NAME}
+# You can find your warehouse name in the R2 Data Catalog dashboard
+npx wrangler r2 sql query "YOUR_WAREHOUSE_NAME" \
   "SELECT * FROM analytics.events LIMIT 10"
 ```
 
@@ -367,8 +307,10 @@ cdpflare/
 
 ```bash
 # Run ingest worker locally (with remote pipeline binding)
-cd workers/event-ingest
-npx wrangler dev --remote
+pnpm dev:ingest
+
+# Run query worker locally
+pnpm dev:query
 
 # Build all packages
 pnpm build
@@ -376,6 +318,8 @@ pnpm build
 # Type check
 pnpm typecheck
 ```
+
+> **Note**: Local development uses `wrangler.local.jsonc` which contains your pipeline bindings. Run `pnpm launch` first to generate these files.
 
 ## Cleanup
 
@@ -393,7 +337,7 @@ npx wrangler r2 bucket delete cdpflare-data
 
 ### "send is not a function" error
 
-Ensure `compatibility_date` in `wrangler.jsonc` is `"2025-01-01"` or later. The Pipelines `send()` method requires this.
+Ensure `compatibility_date` in `wrangler.local.jsonc` is `"2025-01-01"` or later. The Pipelines `send()` method requires this.
 
 ### "Not logged in" error
 
@@ -401,9 +345,20 @@ Run `npx wrangler login` and complete the browser authorization flow.
 
 ### Pipeline binding not working
 
-1. Verify your Stream ID is correct in `wrangler.jsonc`
-2. Run `npx wrangler pipelines streams list` to see your streams
-3. Redeploy after updating the config: `pnpm deploy:ingest`
+1. Check that `wrangler.local.jsonc` exists in `workers/event-ingest/` - if not, run `pnpm launch`
+2. Verify the pipeline binding in `wrangler.local.jsonc` has the correct stream ID
+3. Run `npx wrangler pipelines streams list` to see your streams
+4. Redeploy after any config changes: `pnpm deploy:ingest`
+
+### Query API returns empty data
+
+1. Check that data has been flushed to R2 (pipelines have a 5-minute flush interval by default)
+2. Verify the `WAREHOUSE_NAME` in `workers/query-api/wrangler.local.jsonc` matches your bucket name (just the bucket name, not with account ID prefix)
+3. Check that `CF_ACCOUNT_ID` and `CF_API_TOKEN` secrets are set correctly
+
+### "wrangler.local.jsonc not found" error
+
+Run `pnpm launch` to create the local configuration files with your pipeline bindings.
 
 ## Limitations
 

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Analytics event schema for cdpflare (RudderStack/Segment compatible)",
+  "fields": [
+    {
+      "name": "message_id",
+      "type": "string",
+      "required": true,
+      "description": "Unique identifier for the event"
+    },
+    {
+      "name": "type",
+      "type": "string",
+      "required": true,
+      "description": "Event type: track, identify, page, screen, group, alias"
+    },
+    {
+      "name": "user_id",
+      "type": "string",
+      "required": false,
+      "description": "User identifier (required if anonymous_id not present)"
+    },
+    {
+      "name": "anonymous_id",
+      "type": "string",
+      "required": false,
+      "description": "Anonymous identifier (required if user_id not present)"
+    },
+    {
+      "name": "event",
+      "type": "string",
+      "required": false,
+      "description": "Event name (for track events)"
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": false,
+      "description": "Page or screen name"
+    },
+    {
+      "name": "properties",
+      "type": "json",
+      "required": false,
+      "description": "Event properties"
+    },
+    {
+      "name": "traits",
+      "type": "json",
+      "required": false,
+      "description": "User or group traits"
+    },
+    {
+      "name": "context",
+      "type": "json",
+      "required": false,
+      "description": "Event context (IP, user agent, device info, etc.)"
+    },
+    {
+      "name": "timestamp",
+      "type": "timestamp",
+      "required": true,
+      "description": "When the event occurred (ISO 8601)"
+    },
+    {
+      "name": "sent_at",
+      "type": "timestamp",
+      "required": false,
+      "description": "When the SDK sent the event"
+    },
+    {
+      "name": "received_at",
+      "type": "timestamp",
+      "required": true,
+      "description": "When the server received the event"
+    }
+  ]
+}

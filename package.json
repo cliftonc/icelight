@@ -1,0 +1,28 @@
+{
+  "name": "cdpflare",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Data Platform library for streaming JSON to Iceberg tables",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev:ingest": "pnpm --filter event-ingest dev",
+    "dev:query": "pnpm --filter query-api dev",
+    "deploy:ingest": "pnpm --filter event-ingest deploy",
+    "deploy:query": "pnpm --filter query-api deploy",
+    "deploy:all": "pnpm -r deploy",
+    "setup": "tsx scripts/setup-pipeline.ts",
+    "teardown": "tsx scripts/teardown.ts",
+    "typecheck": "pnpm -r typecheck",
+    "clean": "pnpm -r clean"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

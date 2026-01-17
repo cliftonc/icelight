@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cdpflare-query-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Environment variables
+  // These should be set as secrets or in wrangler.toml:
+  // - wrangler secret put CF_API_TOKEN
+  // - wrangler secret put API_TOKEN (optional, for query API auth)
+  "vars": {
+    // CF_ACCOUNT_ID: Set via secret or dashboard
+    // CF_API_TOKEN: Set via secret
+    // WAREHOUSE_NAME: Set in vars or dashboard
+    // API_TOKEN: Optional - if set, requires Bearer auth for queries
+    // ALLOWED_ORIGINS: Optional comma-separated list
+  }
+}

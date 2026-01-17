@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cdpflare-event-ingest",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Environment variables (override in wrangler.toml or dashboard)
+  "vars": {
+    "AUTH_ENABLED": "false"
+    // AUTH_TOKEN should be set as a secret: wrangler secret put AUTH_TOKEN
+    // ALLOWED_ORIGINS can be set to comma-separated list of origins
+  },
+
+  // Pipeline binding - requires pipeline to be created first via setup script
+  // Uncomment after running: pnpm setup
+  // "pipelines": [
+  //   {
+  //     "pipeline": "cdpflare-events-pipeline",
+  //     "binding": "PIPELINE"
+  //   }
+  // ]
+}

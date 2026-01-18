@@ -81,15 +81,31 @@ export class DuckDBContainer extends PkgContainer<Env> {
         // Start container and wait for port 3000 to be ready
         await this.startAndWaitForPorts(3000);
 
+        // Clone request for potential retry (body can only be read once)
+        const clonedRequest = request.clone();
+
         // Let the base class handle proxying to the container
-        return await super.fetch(request);
+        const response = await super.fetch(clonedRequest);
+
+        // Check if response indicates container not ready (returns plain text error)
+        if (!response.ok) {
+          const text = await response.clone().text();
+          if (text.includes('not running') && attempt < maxRetries - 1) {
+            const delay = baseDelay * Math.pow(2, attempt);
+            console.log(`Container not ready (response), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue;
+          }
+        }
+
+        return response;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
 
         // If it's a "container not running" error, retry
         if (errorMessage.includes('not running') && attempt < maxRetries - 1) {
           const delay = baseDelay * Math.pow(2, attempt);
-          console.log(`Container not ready, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+          console.log(`Container not ready (error), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
           await new Promise((resolve) => setTimeout(resolve, delay));
           continue;
         }

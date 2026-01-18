@@ -1,0 +1,22 @@
+{
+  "name": "duckdb-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker for DuckDB Container API",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "if [ -f wrangler.local.jsonc ]; then wrangler dev -c wrangler.local.jsonc; else echo 'Error: wrangler.local.jsonc not found. Run pnpm launch first.' && exit 1; fi",
+    "deploy": "if [ -f wrangler.local.jsonc ]; then wrangler deploy -c wrangler.local.jsonc --containers-rollout=immediate; else echo 'Error: wrangler.local.jsonc not found. Run pnpm launch first.' && exit 1; fi",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "^0.0.28",
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240117.0",
+    "typescript": "^5.3.3",
+    "wrangler": "^4.59.2"
+  }
+}

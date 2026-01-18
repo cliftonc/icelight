@@ -295,6 +295,51 @@ npx wrangler r2 sql query "YOUR_WAREHOUSE_NAME" \
 
 Connect PyIceberg, DuckDB, or Spark to your R2 Data Catalog. See [Cloudflare R2 SQL docs](https://developers.cloudflare.com/r2-sql/) for connection details.
 
+## DuckDB API (Optional)
+
+The DuckDB API provides full SQL support (JOINs, aggregations, window functions) by running DuckDB in a Cloudflare Container.
+
+### Deploy DuckDB API
+
+The `pnpm launch` script offers to configure the DuckDB API. If you selected yes, just deploy:
+
+```bash
+pnpm deploy:duckdb
+```
+
+### DuckDB API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/query` | POST | Execute SQL query with full DuckDB support |
+| `/_health` | GET | Health check |
+| `/_debug` | GET | Debug info (env vars, init status) |
+
+### Example Query
+
+```bash
+curl -X POST https://cdpflare-duckdb-api.YOUR-SUBDOMAIN.workers.dev/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "SELECT * FROM r2_datalake.analytics.events LIMIT 10"}'
+```
+
+### Advantages over Query API (R2 SQL)
+
+- Full DuckDB SQL (JOINs, aggregations, window functions, CTEs)
+- Complex analytics queries
+- Queries R2 Data Catalog Iceberg tables
+
+### Configuration
+
+| Variable | Description |
+|----------|-------------|
+| `R2_TOKEN` | Cloudflare API token (secret) |
+| `R2_ENDPOINT` | R2 catalog URI |
+| `R2_CATALOG` | Warehouse name |
+| `API_TOKEN` | Optional Bearer token for auth |
+
+> **Note**: Cloudflare Containers is currently in public beta.
+
 ## Project Structure
 
 ```
@@ -305,11 +350,14 @@ cdpflare/
 │   └── query/          # Query library (Hono)
 ├── workers/
 │   ├── event-ingest/   # Ingestion worker
-│   └── query-api/      # Query API worker
+│   ├── query-api/      # Query API worker (R2 SQL)
+│   └── duckdb-api/     # DuckDB API worker (Containers)
+├── container/          # DuckDB container (Node.js + DuckDB)
 ├── scripts/
-│   └── setup-pipeline.ts   # Infrastructure setup
+│   ├── setup-pipeline.ts     # Infrastructure setup
+│   └── download-extensions.sh # DuckDB extensions downloader
 └── templates/
-    └── schema.events.json  # Event schema
+    └── schema.events.json    # Event schema
 ```
 
 ## Development

@@ -1,0 +1,47 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cdpflare-duckdb-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Container configuration
+  // The container image is built from ../../container/Dockerfile
+  "containers": [
+    {
+      "class_name": "DuckDBContainer",
+      "image": "./../../container/Dockerfile",
+      "max_instances": 1,
+      "instance_type": "standard-1"
+    }
+  ],
+
+  // Durable Object bindings for container management
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CONTAINER",
+        "class_name": "DuckDBContainer"
+      }
+    ]
+  },
+
+  // SQLite migrations for DurableObject state
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DuckDBContainer"]
+    }
+  ],
+
+  // Environment variables set in wrangler.local.jsonc after running pnpm launch
+  //
+  // Secrets (set via wrangler secret put):
+  // - R2_TOKEN: Cloudflare API token with R2 + Data Catalog permissions
+  // - API_TOKEN (optional): Bearer token for API auth
+  //
+  // Vars:
+  // - R2_ENDPOINT: R2 catalog URI
+  // - R2_CATALOG: Warehouse name (e.g., cdpflare-data)
+  "vars": {}
+}

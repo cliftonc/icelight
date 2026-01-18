@@ -67,6 +67,17 @@ export class DuckDBContainer extends PkgContainer<Env> {
     this.enableInternet = true;
     this.envVars = envConfig;
   }
+
+  /**
+   * Override fetch to ensure container is started and ready before proxying
+   */
+  override async fetch(request: Request): Promise<Response> {
+    // Start container and wait for port 3000 to be ready
+    await this.startAndWaitForPorts(3000);
+
+    // Let the base class handle proxying to the container
+    return super.fetch(request);
+  }
 }
 
 // Create Hono app for the worker

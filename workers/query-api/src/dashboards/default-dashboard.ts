@@ -12,19 +12,19 @@ export const DEFAULT_DASHBOARD_ID = 'default-events-dashboard';
  * Default dashboard using drizzle-cube AnalysisConfig-based portlets
  */
 export const defaultDashboardConfig: DashboardConfig = {
-  layoutMode: 'grid',
+  layoutMode: 'rows',
   grid: {
     cols: 12,
     rowHeight: 90,
     minW: 3,
-    minH: 3,
+    minH: 2,
   },
   portlets: [
     {
       id: 'kpi-total-events',
       title: 'Total Events',
       w: 4,
-      h: 3,
+      h: 2,
       x: 0,
       y: 0,
       analysisConfig: {
@@ -59,7 +59,7 @@ export const defaultDashboardConfig: DashboardConfig = {
       id: 'kpi-unique-users',
       title: 'Unique Users',
       w: 4,
-      h: 3,
+      h: 2,
       x: 4,
       y: 0,
       analysisConfig: {
@@ -94,7 +94,7 @@ export const defaultDashboardConfig: DashboardConfig = {
       id: 'kpi-anonymous-users',
       title: 'Anonymous Users',
       w: 4,
-      h: 3,
+      h: 2,
       x: 8,
       y: 0,
       analysisConfig: {
@@ -129,9 +129,9 @@ export const defaultDashboardConfig: DashboardConfig = {
       id: 'chart-events-over-time',
       title: 'Events Over Time',
       w: 12,
-      h: 4,
+      h: 3,
       x: 0,
-      y: 3,
+      y: 2,
       analysisConfig: {
         version: 1,
         analysisType: 'query',
@@ -164,9 +164,9 @@ export const defaultDashboardConfig: DashboardConfig = {
       id: 'chart-events-by-type',
       title: 'Events by Type',
       w: 6,
-      h: 5,
+      h: 4,
       x: 0,
-      y: 7,
+      y: 5,
       analysisConfig: {
         version: 1,
         analysisType: 'query',
@@ -196,9 +196,9 @@ export const defaultDashboardConfig: DashboardConfig = {
       id: 'grid-top-events',
       title: 'Top Event Names',
       w: 6,
-      h: 5,
+      h: 4,
       x: 6,
-      y: 7,
+      y: 5,
       analysisConfig: {
         version: 1,
         analysisType: 'query',

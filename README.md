@@ -197,6 +197,39 @@ pnpm typecheck
 pnpm teardown
 ```
 
+## Troubleshooting
+
+### "send is not a function" error
+
+Ensure `compatibility_date` in `wrangler.local.jsonc` is `"2025-01-01"` or later. The Pipelines `send()` method requires this.
+
+### "Not logged in" error
+
+Run `npx wrangler login` and complete the browser authorization flow.
+
+### Pipeline binding not working
+
+1. Check that `wrangler.local.jsonc` exists in `workers/event-ingest/` - if not, run `pnpm launch`
+2. Verify the pipeline binding in `wrangler.local.jsonc` has the correct stream ID
+3. Run `npx wrangler pipelines streams list` to see your streams
+4. Redeploy after any config changes: `pnpm deploy:ingest`
+
+### Query API returns empty data
+
+1. Check that data has been flushed to R2 (pipelines have a 5-minute flush interval by default)
+2. Verify the `WAREHOUSE_NAME` in `workers/query-api/wrangler.local.jsonc` matches your bucket name
+3. Check that `CF_ACCOUNT_ID` and `CF_API_TOKEN` secrets are set correctly
+
+### "wrangler.local.jsonc not found" error
+
+Run `pnpm launch` to create the local configuration files with your pipeline bindings.
+
+## Limitations
+
+- **Cloudflare Pipelines**: Currently in open beta - API may change
+- **R2 SQL**: Read-only, limited query support (improving in 2026)
+- **Local Development**: Pipelines require `--remote` flag for full testing
+
 ## Documentation
 
 - [Getting Started](docs/getting-started.md)

@@ -21,6 +21,26 @@ let initError: string | null = null;
 let duckdbReady = false;
 let connection: any = null;
 
+// Promise that resolves when DuckDB is ready
+let duckdbReadyResolve: () => void;
+const duckdbReadyPromise = new Promise<void>((resolve) => {
+  duckdbReadyResolve = resolve;
+});
+
+// Wait for DuckDB with timeout
+async function waitForDuckDB(timeoutMs: number = 30000): Promise<boolean> {
+  if (duckdbReady) return true;
+  if (initError) return false;
+
+  const timeout = new Promise<boolean>((resolve) =>
+    setTimeout(() => resolve(false), timeoutMs)
+  );
+
+  const ready = duckdbReadyPromise.then(() => true);
+
+  return Promise.race([ready, timeout]);
+}
+
 // Try to load DuckDB - catch any import errors
 async function initDuckDB() {
   console.log('[DUCKDB] Starting initialization...');
@@ -56,6 +76,7 @@ async function initDuckDB() {
 
     // DuckDB is ready for basic queries at this point
     duckdbReady = true;
+    duckdbReadyResolve(); // Signal waiting requests
     console.log('[DUCKDB] Basic initialization complete!');
 
     // Configure R2 catalog if credentials are provided (optional - failures won't block basic usage)
@@ -136,10 +157,13 @@ app.get('/_debug', (c) => {
 
 // Query endpoint
 app.post('/query', async (c) => {
-  if (!duckdbReady) {
+  // Wait for DuckDB to be ready (up to 30 seconds)
+  const ready = await waitForDuckDB(30000);
+
+  if (!ready) {
     return c.json({
       success: false,
-      error: initError || 'DuckDB not initialized yet'
+      error: initError || 'DuckDB initialization timed out'
     }, 503);
   }
 

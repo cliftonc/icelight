@@ -69,14 +69,38 @@ export class DuckDBContainer extends PkgContainer<Env> {
   }
 
   /**
-   * Override fetch to ensure container is started and ready before proxying
+   * Override fetch to ensure container is started and ready before proxying.
+   * Includes retry logic to handle cold start race conditions.
    */
   override async fetch(request: Request): Promise<Response> {
-    // Start container and wait for port 3000 to be ready
-    await this.startAndWaitForPorts(3000);
+    const maxRetries = 5;
+    const baseDelay = 1000; // 1 second
 
-    // Let the base class handle proxying to the container
-    return super.fetch(request);
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Start container and wait for port 3000 to be ready
+        await this.startAndWaitForPorts(3000);
+
+        // Let the base class handle proxying to the container
+        return await super.fetch(request);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+
+        // If it's a "container not running" error, retry
+        if (errorMessage.includes('not running') && attempt < maxRetries - 1) {
+          const delay = baseDelay * Math.pow(2, attempt);
+          console.log(`Container not ready, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+
+        // For other errors or final attempt, rethrow
+        throw error;
+      }
+    }
+
+    // Should never reach here, but TypeScript needs this
+    throw new Error('Failed to start container after maximum retries');
   }
 }
 

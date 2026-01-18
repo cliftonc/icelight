@@ -237,9 +237,30 @@ The Query API includes a web-based Query Explorer and Event Simulator:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/query` | POST | Execute SQL query |
+| `/duckdb` | POST | Execute DuckDB query (full SQL support) |
 | `/tables/:namespace` | GET | List tables in namespace |
 | `/tables/:namespace/:table` | GET | Describe table schema |
+| `/cubejs-api/v1/meta` | GET | Get semantic layer metadata |
+| `/cubejs-api/v1/load` | POST | Execute semantic query |
 | `/health` | GET | Health check |
+
+### Semantic API (Drizzle Cube)
+
+The Query API includes a semantic layer that automatically extracts fields from JSON columns (`properties`, `traits`, `context`). This enables structured queries without writing raw SQL.
+
+```bash
+curl -X POST https://cdpflare-query-api.YOUR-SUBDOMAIN.workers.dev/cubejs-api/v1/load \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": {
+      "dimensions": ["Events.type", "Events.product", "Events.email"],
+      "measures": ["Events.count", "Events.totalRevenue"],
+      "limit": 100
+    }
+  }'
+```
+
+**Customize JSON field extraction** by editing `workers/query-api/src/cube-config.ts`. See [Configuring JSON Field Extraction](docs/querying.md#configuring-json-field-extraction) for details.
 
 ### Example Queries
 
@@ -422,6 +443,13 @@ Run `pnpm launch` to create the local configuration files with your pipeline bin
 - **Cloudflare Pipelines**: Currently in open beta - API may change
 - **R2 SQL**: Read-only, limited query support (improving in 2026)
 - **Local Development**: Pipelines require `--remote` flag for full testing
+
+## Documentation
+
+- [Getting Started](docs/getting-started.md)
+- [Configuration](docs/configuration.md)
+- [Querying Data](docs/querying.md) - SQL queries, Semantic API, JSON field extraction
+- [SDK Integration](docs/sdk-integration.md)
 
 ## Links
 

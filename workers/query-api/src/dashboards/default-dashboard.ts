@@ -128,8 +128,8 @@ export const defaultDashboardConfig: DashboardConfig = {
     {
       id: 'chart-events-over-time',
       title: 'Events Over Time',
-      w: 8,
-      h: 6,
+      w: 12,
+      h: 4,
       x: 0,
       y: 3,
       analysisConfig: {
@@ -138,14 +138,13 @@ export const defaultDashboardConfig: DashboardConfig = {
         activeView: 'chart',
         charts: {
           query: {
-            chartType: 'line',
+            chartType: 'activityGrid',
             chartConfig: {
               xAxis: ['Events.timestamp'],
               yAxis: ['Events.count'],
             },
             displayConfig: {
               showLegend: false,
-              showGrid: true,
             },
           },
         },
@@ -155,7 +154,7 @@ export const defaultDashboardConfig: DashboardConfig = {
             {
               dimension: 'Events.timestamp',
               granularity: 'day',
-              dateRange: 'last 30 days',
+              dateRange: 'last 90 days',
             },
           ],
         },
@@ -164,25 +163,23 @@ export const defaultDashboardConfig: DashboardConfig = {
     {
       id: 'chart-events-by-type',
       title: 'Events by Type',
-      w: 4,
-      h: 6,
-      x: 8,
-      y: 3,
+      w: 6,
+      h: 5,
+      x: 0,
+      y: 7,
       analysisConfig: {
         version: 1,
         analysisType: 'query',
         activeView: 'chart',
         charts: {
           query: {
-            chartType: 'bar',
+            chartType: 'radialBar',
             chartConfig: {
               xAxis: ['Events.type'],
               yAxis: ['Events.count'],
             },
             displayConfig: {
-              showLegend: false,
-              stacked: false,
-              showGrid: true,
+              showLegend: true,
             },
           },
         },
@@ -198,10 +195,10 @@ export const defaultDashboardConfig: DashboardConfig = {
     {
       id: 'grid-top-events',
       title: 'Top Event Names',
-      w: 12,
-      h: 6,
-      x: 0,
-      y: 9,
+      w: 6,
+      h: 5,
+      x: 6,
+      y: 7,
       analysisConfig: {
         version: 1,
         analysisType: 'query',

@@ -16,8 +16,10 @@
   },
   "dependencies": {
     "@icelight/core": "workspace:*",
-    "@icelight/query": "workspace:*",
-    "drizzle-cube": "^0.3.10",
+    "@icelight/sql-guard": "workspace:*",
+    "@icelight/duckdb-http-adapter": "workspace:*",
+    "@leonardovida-md/drizzle-neo-duckdb": "^1.2.2",
+    "drizzle-cube": "^0.3.13",
     "drizzle-orm": "^0.44.0",
     "hono": "^4.6.0"
   },

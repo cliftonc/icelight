@@ -55,8 +55,13 @@ async function initDuckDB() {
 
     console.log('[DUCKDB] Creating instance...');
     instance = await DuckDBInstance.create('/tmp/duckdb.db', {
-      threads: '2',              // Allow parallelism within DuckDB
-      memory_limit: '128MB',     // Lower limit, let DuckDB spill to disk for large queries
+      threads: '4',                        // Allow parallelism within DuckDB
+      memory_limit: '8GB',                 // Plenty of headroom on standard-4 (12GB container)
+      preserve_insertion_order: 'false',   // Reduces memory usage for unordered queries
+      // Note: instance-level access_mode cannot be READ_ONLY because we need to CREATE SECRET
+      // Security is enforced via:
+      // 1. READ_ONLY on the ATTACH statement for the R2 catalog
+      // 2. SQL validation (selectOnly: true) which blocks all write operations
     });
     console.log('[DUCKDB] Instance created with file-backed storage');
 
@@ -97,14 +102,15 @@ async function initDuckDB() {
         `);
         console.log('[DUCKDB] Secret created');
 
-        console.log(`[DUCKDB] Attaching R2 catalog: ${R2_CATALOG}`);
+        console.log(`[DUCKDB] Attaching R2 catalog: ${R2_CATALOG} (read-only)`);
         await connection.run(`
           ATTACH '${R2_CATALOG}' AS r2_datalake (
             TYPE ICEBERG,
-            ENDPOINT '${R2_ENDPOINT}'
+            ENDPOINT '${R2_ENDPOINT}',
+            READ_ONLY
           );
         `);
-        console.log('[DUCKDB] R2 catalog attached as r2_datalake');
+        console.log('[DUCKDB] R2 catalog attached as r2_datalake (read-only)');
 
         // Small delay to ensure catalog is fully ready
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -114,12 +120,6 @@ async function initDuckDB() {
         console.log('[DUCKDB] Setting default catalog+schema...');
         await connection.run(`USE r2_datalake.analytics;`);
         console.log('[DUCKDB] Default catalog+schema set to r2_datalake.analytics');
-
-        // Set read-only mode to prevent any write operations
-        // This provides a second layer of protection after SQL validation
-        console.log('[DUCKDB] Setting read-only mode...');
-        await connection.run(`SET access_mode = 'READ_ONLY';`);
-        console.log('[DUCKDB] Read-only mode enabled');
 
         // Mark catalog as attached so we re-run USE before each query
         r2CatalogAttached = true;
@@ -151,10 +151,30 @@ app.use('*', cors({
 }));
 
 // Health check endpoint
-app.get('/_health', (c) => {
+app.get('/_health', async (c) => {
+  let config = null;
+  if (duckdbReady && connection) {
+    try {
+      const reader = await connection.runAndReadAll(`
+        SELECT
+          current_setting('threads') as threads,
+          current_setting('memory_limit') as memory_limit,
+          current_setting('preserve_insertion_order') as preserve_insertion_order
+      `);
+      const row = reader.getRowObjects()[0];
+      config = {
+        threads: row.threads,
+        memory_limit: row.memory_limit,
+        preserve_insertion_order: row.preserve_insertion_order,
+      };
+    } catch {
+      // Ignore errors fetching config
+    }
+  }
   return c.json({
     status: 'ok',
     duckdb: duckdbReady ? 'ready' : (initError || 'initializing'),
+    config,
     timestamp: new Date().toISOString(),
   });
 });

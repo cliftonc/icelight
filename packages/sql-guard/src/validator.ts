@@ -10,6 +10,10 @@ export interface SqlGuardConfig {
   maxQueryLength?: number;
   /** Block dangerous DuckDB functions (default: true) */
   blockDangerousFunctions?: boolean;
+  /** Maximum allowed LIMIT value (default: undefined = no limit) */
+  maxLimit?: number;
+  /** Require LIMIT for non-aggregated queries (default: false) */
+  requireLimitForNonAggregated?: boolean;
 }
 
 /**
@@ -19,15 +23,21 @@ export interface ValidationResult {
   valid: boolean;
   errors: string[];
   statementType?: string;
+  /** Detected LIMIT value, if present */
+  limitValue?: number;
+  /** Whether aggregation was detected */
+  hasAggregation?: boolean;
 }
 
 /**
  * Default configuration values
  */
-const DEFAULT_CONFIG: Required<SqlGuardConfig> = {
+const DEFAULT_CONFIG: SqlGuardConfig = {
   selectOnly: true,
   maxQueryLength: 10000,
   blockDangerousFunctions: true,
+  maxLimit: undefined,
+  requireLimitForNonAggregated: false,
 };
 
 /**
@@ -75,7 +85,7 @@ function isAllowedStatementType(type: StatementType): boolean {
  * @returns Validation result with any errors
  */
 export function validateSql(sql: string, config?: SqlGuardConfig): ValidationResult {
-  const cfg: Required<SqlGuardConfig> = { ...DEFAULT_CONFIG, ...config };
+  const cfg = { ...DEFAULT_CONFIG, ...config };
   const errors: string[] = [];
 
   // Check for empty query
@@ -84,7 +94,7 @@ export function validateSql(sql: string, config?: SqlGuardConfig): ValidationRes
   }
 
   // Check query length
-  if (sql.length > cfg.maxQueryLength) {
+  if (cfg.maxQueryLength && sql.length > cfg.maxQueryLength) {
     return {
       valid: false,
       errors: [`Query exceeds maximum length of ${cfg.maxQueryLength} bytes`],
@@ -142,10 +152,46 @@ export function validateSql(sql: string, config?: SqlGuardConfig): ValidationRes
     }
   }
 
+  // Check LIMIT requirements
+  let limitValue: number | undefined;
+  let hasAggregation = false;
+
+  if (cfg.requireLimitForNonAggregated || cfg.maxLimit !== undefined) {
+    // Extract LIMIT value
+    const limitMatch = sql.match(/\bLIMIT\s+(\d+)/i);
+    limitValue = limitMatch ? parseInt(limitMatch[1], 10) : undefined;
+
+    // Check for aggregation patterns
+    const aggregationPatterns = [
+      /\bCOUNT\s*\(/i,
+      /\bSUM\s*\(/i,
+      /\bAVG\s*\(/i,
+      /\bMIN\s*\(/i,
+      /\bMAX\s*\(/i,
+      /\bARRAY_AGG\s*\(/i,
+      /\bSTRING_AGG\s*\(/i,
+      /\bGROUP_CONCAT\s*\(/i,
+      /\bGROUP\s+BY\b/i,
+    ];
+    hasAggregation = aggregationPatterns.some((p) => p.test(sql));
+
+    // Require LIMIT for non-aggregated queries
+    if (cfg.requireLimitForNonAggregated && !hasAggregation && limitValue === undefined) {
+      errors.push('Non-aggregated queries must include a LIMIT clause');
+    }
+
+    // Check max LIMIT
+    if (cfg.maxLimit !== undefined && limitValue !== undefined && limitValue > cfg.maxLimit) {
+      errors.push(`LIMIT ${limitValue} exceeds maximum allowed (${cfg.maxLimit})`);
+    }
+  }
+
   return {
     valid: errors.length === 0,
     errors,
     statementType: stmt.type,
+    limitValue,
+    hasAggregation,
   };
 }
 

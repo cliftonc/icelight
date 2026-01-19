@@ -203,7 +203,12 @@ async function handleQuery(c: QueryContext) {
   }
 
   // Validate SQL for security
-  const validation = validateSql(body.sql, { selectOnly: true, maxQueryLength: 10000 });
+  const validation = validateSql(body.sql, {
+    selectOnly: true,
+    maxQueryLength: 10000,
+    requireLimitForNonAggregated: true,
+    maxLimit: 10000,
+  });
   if (!validation.valid) {
     return c.json(
       { success: false, error: `SQL validation failed: ${validation.errors.join('; ')}` } satisfies QueryResponse,
@@ -292,7 +297,12 @@ async function handleDuckDbQuery(c: QueryContext) {
   }
 
   // Validate SQL for security (use higher limit for DuckDB complex queries)
-  const validation = validateSql(body.sql, { selectOnly: true, maxQueryLength: 50000 });
+  const validation = validateSql(body.sql, {
+    selectOnly: true,
+    maxQueryLength: 50000,
+    requireLimitForNonAggregated: true,
+    maxLimit: 10000,
+  });
   if (!validation.valid) {
     return c.json(
       { success: false, error: `SQL validation failed: ${validation.errors.join('; ')}` } satisfies QueryResponse,
@@ -453,7 +463,8 @@ async function handleCubeRequest(c: QueryContext, cubes: Cube[], cacheConfig?: C
     drizzle: db,
     schema: { events },
     extractSecurityContext: async () => ({}),
-    engineType: 'postgres',
+    // Cast needed: hono adapter types don't include 'duckdb' yet (drizzle-cube bug)
+    engineType: 'duckdb' as 'postgres',
     cache: cacheConfig,
   });
 

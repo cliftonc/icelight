@@ -220,6 +220,17 @@ html.dark {
    ============================================================================ */
 
 @layer utilities {
+  /* SVG fill utilities for drizzle-cube chart labels */
+  .fill-dc-text {
+    fill: var(--dc-text);
+  }
+  .fill-dc-text-secondary {
+    fill: var(--dc-text-secondary);
+  }
+  .fill-dc-text-muted {
+    fill: var(--dc-text-muted);
+  }
+
   @media (min-width: 768px) {
     /* Grid - QueryPage and DuckDbPage sidebar layout */
     .md\:grid-cols-\[25\%_1fr\] {

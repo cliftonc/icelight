@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { createQueryApp, createEventsCube, type QueryEnv } from '@icelight/query';
+import { createQueryApp, createEventsCube } from './query/index.js';
+import type { QueryEnv } from './query/index.js';
 import { cubeConfig } from './cube-config.js';
 import { CloudflareKVProvider } from './cache/cloudflare-kv-provider.js';
 import { createDashboardRoutes } from './dashboards/routes.js';
@@ -29,7 +30,7 @@ const queryApp = createQueryApp({
   cubes: [eventsCube],
   cache: {
     providerFactory: (kv) => new CloudflareKVProvider(kv),
-    defaultTtlMs: 300000, // 5 minutes
+    defaultTtlMs: 3600000, // 60 minutes
     keyPrefix: 'drizzle-cube:',
     includeSecurityContext: true,
   },

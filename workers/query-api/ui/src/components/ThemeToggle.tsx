@@ -1,16 +1,31 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { setTheme } from 'drizzle-cube/client';
 
+const THEME_STORAGE_KEY = 'icelight-theme';
+
 export default function ThemeToggle() {
-  // Initialize Drizzle Cube theme on mount
+  const [isLight, setIsLight] = useState(false);
+
+  // Initialize theme from localStorage on mount
   useEffect(() => {
-    const currentTheme = document.documentElement.getAttribute('data-theme');
-    setTheme(currentTheme === 'light' ? 'light' : 'dark');
+    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    const theme = savedTheme || 'dark'; // Default to dark
+
+    // Apply theme to document
+    document.documentElement.setAttribute('data-theme', theme);
+    setTheme(theme === 'light' ? 'light' : 'dark');
+    setIsLight(theme === 'light');
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTheme = e.target.checked ? 'light' : 'dark';
+
+    // Save to localStorage
+    localStorage.setItem(THEME_STORAGE_KEY, newTheme);
+
     // Sync Drizzle Cube theme with DaisyUI
-    setTheme(e.target.checked ? 'light' : 'dark');
+    setTheme(newTheme);
+    setIsLight(newTheme === 'light');
   };
 
   return (
@@ -20,6 +35,7 @@ export default function ThemeToggle() {
         type="checkbox"
         className="theme-controller"
         value="light"
+        checked={isLight}
         onChange={handleChange}
       />
 

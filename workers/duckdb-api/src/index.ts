@@ -161,11 +161,23 @@ app.use('*', async (c: Context<{ Bindings: Env }>, next: Next) => {
   return next();
 });
 
-// Health check (doesn't require container)
-app.get('/_health', (c: Context<{ Bindings: Env }>) => {
+// Health check - fetches DuckDB config from container
+app.get('/_health', async (c: Context<{ Bindings: Env }>) => {
+  let container = null;
+  try {
+    const containerResponse = await c.env.CONTAINER.get(
+      c.env.CONTAINER.idFromName('icelight-duckdb')
+    ).fetch(new Request('http://container/_health'));
+    if (containerResponse.ok) {
+      container = await containerResponse.json();
+    }
+  } catch {
+    // Container may not be running yet
+  }
   return c.json({
     status: 'ok',
     service: 'icelight-duckdb-api',
+    container,
     timestamp: new Date().toISOString(),
   });
 });

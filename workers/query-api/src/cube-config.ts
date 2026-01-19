@@ -1,9 +1,9 @@
-import { type CubeJsonConfig, mergeCubeConfig } from '@icelight/query';
+import { type CubeJsonConfig, mergeCubeConfig } from './query/index.js';
 
 /**
  * Cube JSON field configuration for this deployment
  *
- * Uses defaults from @icelight/query plus any custom fields below.
+ * Uses defaults from ./query plus any custom fields below.
  * To replace defaults entirely, export createCubeConfig({...}) instead.
  */
 export const cubeConfig: CubeJsonConfig = mergeCubeConfig({
@@ -24,11 +24,11 @@ export const cubeConfig: CubeJsonConfig = mergeCubeConfig({
 });
 
 // Or to use only defaults:
-// import { DEFAULT_CUBE_CONFIG } from '@icelight/query';
+// import { DEFAULT_CUBE_CONFIG } from './query/index.js';
 // export const cubeConfig = DEFAULT_CUBE_CONFIG;
 
 // Or to completely replace defaults:
-// import { createCubeConfig } from '@icelight/query';
+// import { createCubeConfig } from './query/index.js';
 // export const cubeConfig = createCubeConfig({
 //   properties: [...],
 //   traits: [...],

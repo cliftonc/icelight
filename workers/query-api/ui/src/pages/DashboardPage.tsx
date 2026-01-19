@@ -8,17 +8,28 @@ export default function DashboardPage() {
   const { mutateAsync: updateDashboard } = useUpdateDashboard()
   const { mutateAsync: resetDashboard, isPending: isResetting } = useResetDashboard()
   const [showResetConfirm, setShowResetConfirm] = useState(false)
+  // Local state to track config changes (including filter changes)
+  const [localConfig, setLocalConfig] = useState<DashboardConfig | null>(null)
 
   const dashboardId = dashboard?.id
+
+  // Use local config if available, otherwise use dashboard config
+  const activeConfig = localConfig ?? dashboard?.config
 
   const handleReset = useCallback(async () => {
     try {
       await resetDashboard()
+      setLocalConfig(null) // Clear local config on reset
       setShowResetConfirm(false)
     } catch (err) {
       console.error('Failed to reset dashboard:', err)
     }
   }, [resetDashboard])
+
+  // Handle config changes (including filter changes)
+  const handleConfigChange = useCallback((config: DashboardConfig) => {
+    setLocalConfig(config)
+  }, [])
 
   const handleSave = useCallback(
     async (config: DashboardConfig) => {
@@ -31,6 +42,7 @@ export default function DashboardPage() {
         isDefault: dashboard.isDefault,
         config
       })
+      setLocalConfig(null) // Clear local config after save
     },
     [dashboard, dashboardId, updateDashboard]
   )
@@ -127,8 +139,9 @@ export default function DashboardPage() {
         </div>
 
         <AnalyticsDashboard
-          config={dashboard.config}
+          config={activeConfig!}
           editable={true}
+          onConfigChange={handleConfigChange}
           onSave={handleSave}
         />
 

@@ -147,6 +147,11 @@ export function createQueryApp(options: QueryAppOptions = {}) {
     return handleDuckDbQuery(c);
   });
 
+  // DuckDB health check proxy
+  app.get('/duckdb/_health', async (c) => {
+    return handleDuckDbHealth(c);
+  });
+
   // Proxy /v1/* routes to the ingest API
   app.all('/v1/*', async (c) => {
     return handleIngestProxy(c);
@@ -372,6 +377,47 @@ async function handleDuckDbQuery(c: QueryContext) {
       } satisfies QueryResponse,
       400
     );
+  }
+}
+
+/**
+ * Handle DuckDB health check proxy request
+ * Proxies to the DuckDB API's /_health endpoint
+ */
+async function handleDuckDbHealth(c: QueryContext) {
+  if (!c.env.DUCKDB_API && !c.env.DUCKDB_API_URL) {
+    return c.json({
+      status: 'error',
+      service: 'icelight-duckdb-api',
+      error: 'DuckDB API not configured',
+      container: null,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  const useServiceBinding = !!c.env.DUCKDB_API;
+  const targetUrl = useServiceBinding
+    ? 'https://duckdb-api/_health'
+    : new URL('/_health', c.env.DUCKDB_API_URL).toString();
+
+  const fetchFn = useServiceBinding
+    ? c.env.DUCKDB_API!.fetch.bind(c.env.DUCKDB_API)
+    : fetch;
+
+  try {
+    const response = await fetchFn(targetUrl, { method: 'GET' });
+    return new Response(response.body, {
+      status: response.status,
+      headers: response.headers,
+    });
+  } catch (error) {
+    return c.json({
+      status: 'error',
+      service: 'icelight-duckdb-api',
+      error: error instanceof Error ? error.message : String(error),
+      container: null,
+      timestamp: new Date().toISOString(),
+    });
   }
 }
 

@@ -9,7 +9,7 @@ export default function ThemeToggle() {
   // Initialize theme from localStorage on mount
   useEffect(() => {
     const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-    const theme = savedTheme || 'dark'; // Default to dark
+    const theme = savedTheme || 'night'; // Default to night (blue-toned dark theme)
 
     // Apply theme to document
     document.documentElement.setAttribute('data-theme', theme);
@@ -18,14 +18,18 @@ export default function ThemeToggle() {
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTheme = e.target.checked ? 'light' : 'dark';
+    const newDaisyTheme = e.target.checked ? 'light' : 'night';
+    const newDrizzleTheme = e.target.checked ? 'light' : 'dark';
 
     // Save to localStorage
-    localStorage.setItem(THEME_STORAGE_KEY, newTheme);
+    localStorage.setItem(THEME_STORAGE_KEY, newDaisyTheme);
 
-    // Sync Drizzle Cube theme with DaisyUI
-    setTheme(newTheme);
-    setIsLight(newTheme === 'light');
+    // Apply DaisyUI theme
+    document.documentElement.setAttribute('data-theme', newDaisyTheme);
+
+    // Sync Drizzle Cube theme (only supports light/dark)
+    setTheme(newDrizzleTheme);
+    setIsLight(newDaisyTheme === 'light');
   };
 
   return (

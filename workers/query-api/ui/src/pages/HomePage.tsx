@@ -1,4 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
+import Prism from 'prismjs';
+import 'prismjs/components/prism-javascript';
+import 'prismjs/components/prism-bash';
+
+function useTheme() {
+  const subscribe = (callback: () => void) => {
+    const observer = new MutationObserver(callback);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+    return () => observer.disconnect();
+  };
+  const getSnapshot = () =>
+    document.documentElement.getAttribute('data-theme') || 'night';
+  return useSyncExternalStore(subscribe, getSnapshot, () => 'night');
+}
 
 interface ArchitectureNodeProps {
   label: string;
@@ -130,13 +147,19 @@ function CodeBlock({ code, language = 'bash' }: { code: string; language?: strin
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const grammar = Prism.languages[language] || Prism.languages.plain;
+  const highlighted = Prism.highlight(code, grammar, language);
+
   return (
     <div className="relative">
-      <pre className="bg-base-300 rounded-lg p-4 overflow-x-auto text-sm">
-        <code className={`language-${language}`}>{code}</code>
+      <pre className="rounded-lg p-4 overflow-x-auto text-sm bg-base-300 border border-base-content/10">
+        <code
+          className={`language-${language}`}
+          dangerouslySetInnerHTML={{ __html: highlighted }}
+        />
       </pre>
       <button
-        className="absolute top-2 right-2 btn btn-ghost btn-xs"
+        className="absolute top-2 right-2 btn btn-ghost btn-xs opacity-60 hover:opacity-100"
         onClick={handleCopy}
         title="Copy to clipboard"
       >
@@ -189,6 +212,7 @@ interface HomePageProps {
 
 export default function HomePage({ onNavigate }: HomePageProps) {
   const [sdkTab, setSdkTab] = useState<'rudderstack' | 'http'>('rudderstack');
+  const theme = useTheme();
 
   return (
     <div className="min-h-screen">
@@ -274,8 +298,85 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         </div>
       </section>
 
+      {/* Visualization Showcase */}
+      <section className="py-16 px-4">
+        <div className="container mx-auto max-w-6xl">
+          <div className="grid md:grid-cols-2 gap-8 items-center">
+            {/* Dashboard screenshot - switches based on theme */}
+            <div className="relative rounded-xl overflow-hidden shadow-2xl border border-base-300">
+              <img
+                src={theme === 'light' ? '/dashboard_light.png' : '/dashboard_dark.png'}
+                alt="Dashboard Preview"
+                className="w-full"
+              />
+            </div>
+
+            {/* Text content + CTAs */}
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-3xl font-bold mb-4">Powerful Analytics Dashboards</h2>
+                <p className="text-base-content/70 text-lg">
+                  Build interactive dashboards with funnels, user journey flows, activity grids,
+                  metrics, and more. Analyze conversion rates, visualize behavior patterns,
+                  and track key metrics in near real-time.
+                </p>
+              </div>
+
+              {/* Drizzle-Cube info */}
+              <div className="card bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20">
+                <div className="card-body p-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <svg className="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <h3 className="font-bold">Powered by Drizzle-Cube</h3>
+                  </div>
+                  <p className="text-sm text-base-content/70 mb-3">
+                    A semantic layer for analytics that transforms queries into optimized SQL.
+                    Define measures, dimensions, and filters once - use them everywhere.
+                  </p>
+                  <a
+                    href="https://www.npmjs.com/package/drizzle-cube"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="link link-primary text-sm inline-flex items-center gap-1"
+                  >
+                    Learn more about Drizzle-Cube
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                </div>
+              </div>
+
+              {/* CTA buttons */}
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => onNavigate('analysis')}
+                  className="btn btn-primary gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  Try Analysis
+                </button>
+                <button
+                  onClick={() => onNavigate('dashboard')}
+                  className="btn btn-secondary gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 2 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                  </svg>
+                  View Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Quick Start */}
-      <section id="quickstart" className="py-16 px-4 scroll-mt-16">
+      <section id="quickstart" className="py-16 px-4 bg-base-200 scroll-mt-16">
         <div className="container mx-auto max-w-4xl">
           <h2 className="text-3xl font-bold text-center mb-12">Quick Start</h2>
           <div className="space-y-8">
@@ -365,132 +466,6 @@ curl -X POST https://YOUR-WORKER.workers.dev/v1/batch \\
   ]}'`}
             />
           )}
-        </div>
-      </section>
-
-      {/* API Reference */}
-      <section className="py-16 px-4">
-        <div className="container mx-auto max-w-4xl">
-          <h2 className="text-3xl font-bold text-center mb-12">API Reference</h2>
-
-          <div className="space-y-8">
-            {/* Ingestion Endpoints */}
-            <div className="collapse collapse-arrow bg-base-100 shadow-lg">
-              <input type="checkbox" defaultChecked />
-              <div className="collapse-title text-xl font-medium">Ingestion Worker</div>
-              <div className="collapse-content">
-                <div className="overflow-x-auto">
-                  <table className="table table-zebra">
-                    <thead>
-                      <tr>
-                        <th>Method</th>
-                        <th>Endpoint</th>
-                        <th>Description</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td><code className="badge badge-primary">POST</code></td>
-                        <td><code>/v1/batch</code></td>
-                        <td>Batch events (primary)</td>
-                      </tr>
-                      <tr>
-                        <td><code className="badge badge-primary">POST</code></td>
-                        <td><code>/v1/track</code></td>
-                        <td>Single track event</td>
-                      </tr>
-                      <tr>
-                        <td><code className="badge badge-primary">POST</code></td>
-                        <td><code>/v1/identify</code></td>
-                        <td>Single identify event</td>
-                      </tr>
-                      <tr>
-                        <td><code className="badge badge-primary">POST</code></td>
-                        <td><code>/v1/page</code></td>
-                        <td>Single page event</td>
-                      </tr>
-                      <tr>
-                        <td><code className="badge badge-primary">POST</code></td>
-                        <td><code>/v1/screen</code></td>
-                        <td>Single screen event</td>
-                      </tr>
-                      <tr>
-                        <td><code className="badge badge-primary">POST</code></td>
-                        <td><code>/v1/group</code></td>
-                        <td>Single group event</td>
-                      </tr>
-                      <tr>
-                        <td><code className="badge badge-primary">POST</code></td>
-                        <td><code>/v1/alias</code></td>
-                        <td>Single alias event</td>
-                      </tr>
-                      <tr>
-                        <td><code className="badge badge-success">GET</code></td>
-                        <td><code>/health</code></td>
-                        <td>Health check</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            {/* Query Endpoints */}
-            <div className="collapse collapse-arrow bg-base-100 shadow-lg">
-              <input type="checkbox" defaultChecked />
-              <div className="collapse-title text-xl font-medium">Query API Worker</div>
-              <div className="collapse-content">
-                <div className="overflow-x-auto">
-                  <table className="table table-zebra">
-                    <thead>
-                      <tr>
-                        <th>Method</th>
-                        <th>Endpoint</th>
-                        <th>Description</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td><code className="badge badge-primary">POST</code></td>
-                        <td><code>/query</code></td>
-                        <td>Execute R2 SQL query</td>
-                      </tr>
-                      <tr>
-                        <td><code className="badge badge-primary">POST</code></td>
-                        <td><code>/duckdb</code></td>
-                        <td>Execute DuckDB query (full SQL)</td>
-                      </tr>
-                      <tr>
-                        <td><code className="badge badge-success">GET</code></td>
-                        <td><code>/tables/:namespace</code></td>
-                        <td>List tables in namespace</td>
-                      </tr>
-                      <tr>
-                        <td><code className="badge badge-success">GET</code></td>
-                        <td><code>/tables/:namespace/:table</code></td>
-                        <td>Describe table schema</td>
-                      </tr>
-                      <tr>
-                        <td><code className="badge badge-success">GET</code></td>
-                        <td><code>/cubejs-api/v1/meta</code></td>
-                        <td>Get semantic layer metadata</td>
-                      </tr>
-                      <tr>
-                        <td><code className="badge badge-primary">POST</code></td>
-                        <td><code>/cubejs-api/v1/load</code></td>
-                        <td>Execute semantic query</td>
-                      </tr>
-                      <tr>
-                        <td><code className="badge badge-success">GET</code></td>
-                        <td><code>/health</code></td>
-                        <td>Health check</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 

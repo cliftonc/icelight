@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import TokenInput from './TokenInput.tsx';
 import ThemeToggle from './ThemeToggle.tsx';
+import DuckDbStatus from './DuckDbStatus.tsx';
 
 type Page = 'home' | 'query' | 'duckdb' | 'simulator' | 'analysis' | 'dashboard';
 
@@ -86,6 +87,7 @@ export default function Navbar({ currentPage, onPageChange }: NavbarProps) {
         {/* Right: Controls (hidden on mobile) + Mobile menu button */}
         <div className="navbar-end">
           <div className="hidden md:flex items-center gap-2">
+            <DuckDbStatus />
             <TokenInput />
             <ThemeToggle />
           </div>
@@ -159,6 +161,7 @@ export default function Navbar({ currentPage, onPageChange }: NavbarProps) {
               </button>
             </div>
             <div className="flex items-center gap-2">
+              <DuckDbStatus />
               <TokenInput />
               <ThemeToggle />
             </div>

@@ -1,0 +1,15 @@
+# Security Policy
+
+## Supported Versions
+
+| Version | Supported          |
+| ------- | ------------------ |
+| 0.1.x   | - |
+| 0.2.x   | - |
+| 0.3.x   | :white_check_mark: |
+
+## Reporting a Vulnerability
+
+If you find any type of security vulnerability or issue, please create an issue here: https://github.com/cliftonc/icelight/issues/new?template=bug_report.md
+
+If you think the issue is sensitive and may adversely impact anyone using icelight please report via email at: security@guidemode.dev.

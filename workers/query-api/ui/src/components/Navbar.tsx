@@ -30,7 +30,7 @@ export default function Navbar({ currentPage, onPageChange }: NavbarProps) {
             className="flex items-center hover:opacity-80 transition-opacity"
           >
             <img src="/logo.png" alt="icelight" className="h-10 w-auto" />
-            <span className="ml-2 text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            <span className="ml-2 text-xl font-bold text-primary">
               icelight
             </span>
           </button>

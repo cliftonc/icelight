@@ -1,4 +1,4 @@
-import { useState, useEffect, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-bash';
@@ -17,136 +17,130 @@ function useTheme() {
   return useSyncExternalStore(subscribe, getSnapshot, () => 'night');
 }
 
-interface ArchitectureNodeProps {
-  label: string;
-  sublabel?: string;
-  delay?: number;
-  isHighlighted?: boolean;
-  badge?: string;
+// Decorative flowing lines SVG for visual interest
+function DecorativeCurve() {
+  return (
+    <svg
+      className="w-full h-64"
+      viewBox="0 0 1200 200"
+      preserveAspectRatio="xMidYMid slice"
+      fill="none"
+    >
+      {/* Main flowing line - top */}
+      <path
+        d="M0 60 Q200 20 400 50 T800 30 T1200 55"
+        stroke="url(#gradient1)"
+        strokeWidth="2.5"
+        fill="none"
+      />
+      {/* Secondary wave - middle */}
+      <path
+        d="M0 100 Q300 60 600 100 T1200 80"
+        stroke="url(#gradient2)"
+        strokeWidth="2"
+        fill="none"
+        opacity="0.8"
+      />
+      {/* Third accent line - lower */}
+      <path
+        d="M0 140 Q250 100 500 130 T900 110 T1200 140"
+        stroke="url(#gradient3)"
+        strokeWidth="1.5"
+        fill="none"
+        opacity="0.6"
+      />
+      {/* Fourth subtle line */}
+      <path
+        d="M0 170 Q400 140 800 160 T1200 150"
+        stroke="url(#gradient2)"
+        strokeWidth="1"
+        fill="none"
+        opacity="0.4"
+      />
+      {/* Accent dots scattered across */}
+      <circle cx="150" cy="45" r="5" fill="#818cf8" opacity="0.9" />
+      <circle cx="400" cy="55" r="6" fill="#6366f1" opacity="0.8" />
+      <circle cx="700" cy="35" r="4" fill="#a5b4fc" opacity="0.7" />
+      <circle cx="1000" cy="50" r="5" fill="#818cf8" opacity="0.7" />
+      <circle cx="250" cy="95" r="4" fill="#c7d2fe" opacity="0.6" />
+      <circle cx="550" cy="105" r="5" fill="#6366f1" opacity="0.7" />
+      <circle cx="850" cy="85" r="4" fill="#a5b4fc" opacity="0.6" />
+      <circle cx="1100" cy="90" r="4" fill="#818cf8" opacity="0.5" />
+      <circle cx="100" cy="135" r="3" fill="#6366f1" opacity="0.5" />
+      <circle cx="450" cy="125" r="4" fill="#c7d2fe" opacity="0.5" />
+      <circle cx="750" cy="115" r="3" fill="#818cf8" opacity="0.4" />
+      <circle cx="950" cy="130" r="4" fill="#a5b4fc" opacity="0.5" />
+
+      {/* Gradients */}
+      <defs>
+        <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.3" />
+          <stop offset="50%" stopColor="#818cf8" stopOpacity="0.8" />
+          <stop offset="100%" stopColor="#6366f1" stopOpacity="0.3" />
+        </linearGradient>
+        <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#818cf8" stopOpacity="0.2" />
+          <stop offset="50%" stopColor="#a5b4fc" stopOpacity="0.6" />
+          <stop offset="100%" stopColor="#818cf8" stopOpacity="0.2" />
+        </linearGradient>
+        <linearGradient id="gradient3" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#c7d2fe" stopOpacity="0.1" />
+          <stop offset="50%" stopColor="#6366f1" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="#c7d2fe" stopOpacity="0.1" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
 }
 
-function ArchitectureNode({ label, sublabel, delay = 0, isHighlighted, badge }: ArchitectureNodeProps) {
+// Architecture node - visible borders, uniform size
+function ArchitectureNode({ label, sublabel, beta }: { label: string; sublabel?: string; beta?: boolean }) {
   return (
-    <div
-      className={`relative px-4 py-3 rounded-lg border-2 transition-all duration-500 ${
-        isHighlighted
-          ? 'border-primary bg-primary/10 shadow-lg shadow-primary/20'
-          : 'border-base-300 bg-base-100'
-      }`}
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      {badge && (
-        <span className="absolute -top-2 -right-2 badge badge-xs badge-warning text-[10px]">
-          {badge}
+    <div className="relative w-[140px] h-[80px] flex flex-col items-center justify-center rounded-lg border-2 border-primary/40 bg-base-100 text-center px-3">
+      <div className="text-sm font-semibold text-base-content">{label}</div>
+      {sublabel && <div className="text-xs text-base-content/70 mt-0.5">{sublabel}</div>}
+      {beta && (
+        <span className="absolute -top-2 -right-2 px-1.5 py-0.5 text-[10px] font-medium bg-warning text-warning-content rounded">
+          beta
         </span>
       )}
-      <div className="text-sm font-semibold">{label}</div>
-      {sublabel && <div className="text-xs opacity-70">{sublabel}</div>}
     </div>
   );
 }
 
-function AnimatedArrow({ delay = 0, isActive }: { delay?: number; isActive?: boolean }) {
+// Arrow connector with primary color
+function Arrow() {
   return (
-    <div className="flex items-center justify-center px-2">
-      <svg
-        className={`w-8 h-8 transition-all duration-300 ${
-          isActive ? 'text-primary' : 'text-base-300'
-        }`}
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M13 7l5 5m0 0l-5 5m5-5H6"
-          className={isActive ? 'animate-pulse' : ''}
-          style={{ animationDelay: `${delay}ms` }}
-        />
+    <div className="flex items-center px-2">
+      <svg className="w-6 h-6 text-primary/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
       </svg>
     </div>
   );
 }
 
+// Static architecture diagram
 function ArchitectureDiagram() {
-  const [activeStep, setActiveStep] = useState(0);
-
-  // Auto-cycle through steps (6 steps now, faster animation)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveStep((prev) => (prev + 1) % 6);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
   return (
-    <div className="hidden md:block w-full overflow-x-auto py-8">
-      <div className="flex items-center justify-center gap-2 min-w-[850px] px-4">
-        <ArchitectureNode
-          label="Your App"
-          sublabel="Analytics.js SDK"
-          isHighlighted={activeStep === 0}
-        />
-        <AnimatedArrow isActive={activeStep === 1} />
-        <ArchitectureNode
-          label="Event Ingest"
-          sublabel="Worker"
-          isHighlighted={activeStep === 1}
-        />
-        <AnimatedArrow isActive={activeStep === 2} />
-        <ArchitectureNode
-          label="Cloudflare"
-          sublabel="Pipeline"
-          isHighlighted={activeStep === 2}
-          badge="Beta"
-        />
-        <AnimatedArrow isActive={activeStep === 3} />
-        <ArchitectureNode
-          label="R2 + Iceberg"
-          sublabel="Data Catalog"
-          isHighlighted={activeStep === 3}
-          badge="Beta"
-        />
-        <AnimatedArrow isActive={activeStep === 4} />
-        <ArchitectureNode
-          label="DuckDB"
-          sublabel="Container"
-          isHighlighted={activeStep === 4}
-          badge="Beta"
-        />
-        <AnimatedArrow isActive={activeStep === 5} />
-        <ArchitectureNode
-          label="Drizzle-Cube"
-          sublabel="Semantic Layer"
-          isHighlighted={activeStep === 5}
-        />
+    <div className="w-full overflow-x-auto py-8">
+      <div className="flex items-center justify-center gap-2 min-w-[900px] px-4">
+        <ArchitectureNode label="Your App" sublabel="Analytics SDK" />
+        <Arrow />
+        <ArchitectureNode label="Ingest Worker" sublabel="Cloudflare" />
+        <Arrow />
+        <ArchitectureNode label="Pipelines" sublabel="Cloudflare" beta />
+        <Arrow />
+        <ArchitectureNode label="R2 + Iceberg" sublabel="Cloudflare" beta />
+        <Arrow />
+        <ArchitectureNode label="DuckDB" sublabel="Cloudflare Container" beta />
+        <Arrow />
+        <ArchitectureNode label="Drizzle-Cube" sublabel="Semantic Layer" />
       </div>
     </div>
   );
 }
 
-function FeatureCard({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
-      <div className="card-body">
-        <div className="text-primary text-4xl mb-2">{icon}</div>
-        <h3 className="card-title">{title}</h3>
-        <p className="text-base-content/70">{description}</p>
-      </div>
-    </div>
-  );
-}
-
+// Clean code block with copy button
 function CodeBlock({ code, language = 'bash' }: { code: string; language?: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -161,14 +155,14 @@ function CodeBlock({ code, language = 'bash' }: { code: string; language?: strin
 
   return (
     <div className="relative">
-      <pre className="rounded-lg p-4 overflow-x-auto text-sm bg-base-300 border border-base-content/10">
+      <pre className="rounded border border-base-300 bg-base-200/50 p-4 overflow-x-auto text-sm">
         <code
           className={`language-${language}`}
           dangerouslySetInnerHTML={{ __html: highlighted }}
         />
       </pre>
       <button
-        className="absolute top-2 right-2 btn btn-ghost btn-xs opacity-60 hover:opacity-100"
+        className="absolute top-2 right-2 p-1.5 rounded text-base-content/40 hover:text-base-content/70 hover:bg-base-300/50 transition-colors"
         onClick={handleCopy}
         title="Copy to clipboard"
       >
@@ -178,12 +172,7 @@ function CodeBlock({ code, language = 'bash' }: { code: string; language?: strin
           </svg>
         ) : (
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
           </svg>
         )}
       </button>
@@ -191,22 +180,15 @@ function CodeBlock({ code, language = 'bash' }: { code: string; language?: strin
   );
 }
 
-function QuickStartStep({
-  number,
-  title,
-  code,
-}: {
-  number: number;
-  title: string;
-  code: string;
-}) {
+// Quick start step with plain number
+function QuickStartStep({ number, title, code }: { number: number; title: string; code: string }) {
   return (
     <div className="flex gap-4">
-      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold">
+      <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center text-primary font-bold text-lg">
         {number}
       </div>
       <div className="flex-1">
-        <h4 className="font-semibold mb-2">{title}</h4>
+        <h4 className="font-medium mb-2 text-base-content/90">{title}</h4>
         <CodeBlock code={code} />
       </div>
     </div>
@@ -224,95 +206,57 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const theme = useTheme();
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-base-100">
       {/* Hero Section */}
-      <section className="py-16 px-4 bg-gradient-to-br from-base-200 via-base-100 to-base-200">
-        <div className="container mx-auto max-w-6xl text-center">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6">
-            <span className="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
-              Analytics Events
-            </span>
+      <section className="pt-20 pb-8 px-4">
+        <div className="container mx-auto max-w-4xl text-center">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 text-base-content">
+            Stream Analytics Events
             <br />
-            <span className="text-base-content">to Apache Iceberg on Cloudflare</span>
+            <span className="text-primary">to Iceberg on R2</span>
           </h1>
-          <p className="text-xl text-base-content/70 mb-8 max-w-2xl mx-auto">
-            Stream Analytics.js compatible events to Apache Iceberg tables on Cloudflare's data
-            platform. Query with R2 SQL, DuckDB, or the semantic API.
+          <p className="text-lg text-base-content/60 mb-10 max-w-2xl mx-auto">
+            Analytics.js compatible events to Iceberg tables on Cloudflare.
+            Query with DuckDB or the semantic API.
           </p>
-          <div className="flex flex-wrap justify-center gap-4 mb-12">
-            <a href="#quickstart" className="btn btn-primary btn-lg">
-              Get Started
-            </a>
+          <div className="flex flex-wrap justify-center gap-4">
             <button
-              className="btn btn-outline btn-lg"
+              className="px-6 py-3 bg-primary text-primary-content rounded font-medium hover:bg-primary/90 transition-colors"
               onClick={() => onNavigate('dashboard')}
             >
-              Try Demo
+              Try the Demo
             </button>
+            <a
+              href="https://github.com/cliftonc/icelight"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-6 py-3 border border-base-300 rounded font-medium hover:bg-base-200 transition-colors"
+            >
+              View on GitHub
+            </a>
           </div>
+        </div>
 
-          {/* Animated Architecture Diagram */}
+        {/* Decorative flowing lines - below content */}
+        <div className="mt-12 -mb-16 relative z-0">
+          <DecorativeCurve />
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="py-16 px-4 bg-base-200/30">
+        <div className="container mx-auto max-w-6xl">
+          <h2 className="text-2xl font-bold text-center mb-8">How It Works</h2>
           <ArchitectureDiagram />
         </div>
       </section>
 
-      {/* Feature Cards */}
-      <section className="py-16 px-4 bg-base-200">
+      {/* Dashboard Showcase - Asymmetric Layout */}
+      <section className="py-20 px-4">
         <div className="container mx-auto max-w-6xl">
-          <h2 className="text-3xl font-bold text-center mb-12">Features</h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            <FeatureCard
-              icon={
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-10 h-10">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                  />
-                </svg>
-              }
-              title="Event Ingestion"
-              description="RudderStack/Segment-compatible HTTP endpoints. Drop-in replacement for your existing analytics pipeline."
-            />
-            <FeatureCard
-              icon={
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-10 h-10">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"
-                  />
-                </svg>
-              }
-              title="Apache Iceberg Storage"
-              description="Automatic compaction, schema evolution, and time travel. Your data stored in open table format on R2."
-            />
-            <FeatureCard
-              icon={
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-10 h-10">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-              }
-              title="Flexible Querying"
-              description="R2 SQL for simple queries, DuckDB for full SQL support, and a semantic API for building dashboards."
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Visualization Showcase */}
-      <section className="py-16 px-4">
-        <div className="container mx-auto max-w-6xl">
-          <div className="grid md:grid-cols-2 gap-8 items-center">
-            {/* Dashboard screenshot - switches based on theme */}
-            <div className="relative rounded-xl overflow-hidden shadow-2xl border border-base-300">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            {/* Screenshot */}
+            <div className="rounded-lg overflow-hidden border border-base-300 shadow-sm">
               <img
                 src={theme === 'light' ? '/dashboard_light.png' : '/dashboard_dark.png'}
                 alt="Dashboard Preview"
@@ -320,62 +264,44 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               />
             </div>
 
-            {/* Text content + CTAs */}
+            {/* Text content */}
             <div className="space-y-6">
-              <div>
-                <h2 className="text-3xl font-bold mb-4">Powerful Analytics Dashboards</h2>
-                <p className="text-base-content/70 text-lg">
-                  Build interactive dashboards with funnels, user journey flows, activity grids,
-                  metrics, and more. Analyze conversion rates, visualize behavior patterns,
-                  and track key metrics in near real-time.
-                </p>
-              </div>
+              <h2 className="text-3xl font-bold">Powerful Analytics Dashboards</h2>
+              <p className="text-base-content/60 text-lg leading-relaxed">
+                Build interactive dashboards with funnels, user journey flows,
+                activity grids, and metrics. Analyze conversion rates and track
+                key metrics in near real-time.
+              </p>
 
               {/* Drizzle-Cube info */}
-              <div className="card bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20">
-                <div className="card-body p-4">
-                  <div className="flex items-center gap-3 mb-2">
-                    <svg className="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
-                    <h3 className="font-bold">Powered by Drizzle-Cube</h3>
-                  </div>
-                  <p className="text-sm text-base-content/70 mb-3">
-                    A semantic layer for analytics that transforms queries into optimized SQL.
-                    Define measures, dimensions, and filters once - use them everywhere.
-                  </p>
-                  <a
-                    href="https://www.npmjs.com/package/drizzle-cube"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="link link-primary text-sm inline-flex items-center gap-1"
-                  >
-                    Learn more about Drizzle-Cube
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </a>
-                </div>
+              <div className="border border-base-300 rounded p-4">
+                <h3 className="font-medium mb-1">Powered by Drizzle-Cube</h3>
+                <p className="text-sm text-base-content/60 mb-2">
+                  A semantic layer that transforms queries into optimized SQL.
+                  Define measures and dimensions once, use them everywhere.
+                </p>
+                <a
+                  href="https://www.npmjs.com/package/drizzle-cube"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary hover:underline"
+                >
+                  Learn more →
+                </a>
               </div>
 
-              {/* CTA buttons */}
-              <div className="flex flex-wrap gap-3">
+              {/* CTAs */}
+              <div className="flex flex-wrap gap-3 pt-2">
                 <button
                   onClick={() => onNavigate('analysis')}
-                  className="btn btn-primary gap-2"
+                  className="px-5 py-2.5 bg-primary text-primary-content rounded font-medium hover:bg-primary/90 transition-colors"
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
                   Try Analysis
                 </button>
                 <button
                   onClick={() => onNavigate('dashboard')}
-                  className="btn btn-secondary gap-2"
+                  className="px-5 py-2.5 border border-base-300 rounded font-medium hover:bg-base-200 transition-colors"
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 2 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-                  </svg>
                   View Dashboard
                 </button>
               </div>
@@ -385,16 +311,15 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       </section>
 
       {/* Quick Start */}
-      <section id="quickstart" className="py-16 px-4 bg-base-200 scroll-mt-16">
-        <div className="container mx-auto max-w-4xl">
-          <h2 className="text-3xl font-bold text-center mb-12">Quick Start</h2>
-          <div className="space-y-8">
+      <section id="quickstart" className="py-16 px-4 bg-base-200/30 scroll-mt-16">
+        <div className="container mx-auto max-w-2xl">
+          <h2 className="text-2xl font-bold text-center mb-10">Quick Start</h2>
+          <div className="space-y-6">
             <QuickStartStep
               number={1}
               title="Clone & Install"
               code={`git clone https://github.com/cliftonc/icelight.git
-cd icelight
-pnpm install`}
+cd icelight && pnpm install`}
             />
             <QuickStartStep
               number={2}
@@ -406,28 +331,33 @@ pnpm install`}
               title="Launch Everything"
               code="pnpm launch"
             />
-            <QuickStartStep
-              number={4}
-              title="Open the Web UI"
-              code="https://icelight-query-api.YOUR-SUBDOMAIN.workers.dev"
-            />
           </div>
         </div>
       </section>
 
       {/* SDK Integration */}
-      <section className="py-16 px-4 bg-base-200">
-        <div className="container mx-auto max-w-4xl">
-          <h2 className="text-3xl font-bold text-center mb-12">SDK Integration</h2>
-          <div className="tabs tabs-boxed justify-center mb-6 bg-base-300">
+      <section className="py-16 px-4">
+        <div className="container mx-auto max-w-2xl">
+          <h2 className="text-2xl font-bold text-center mb-8">SDK Integration</h2>
+
+          {/* Simple text tabs */}
+          <div className="flex justify-center gap-6 mb-6">
             <button
-              className={`tab ${sdkTab === 'rudderstack' ? 'tab-active' : ''}`}
+              className={`pb-1 border-b-2 transition-colors ${
+                sdkTab === 'rudderstack'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-base-content/60 hover:text-base-content'
+              }`}
               onClick={() => setSdkTab('rudderstack')}
             >
               RudderStack / Segment
             </button>
             <button
-              className={`tab ${sdkTab === 'http' ? 'tab-active' : ''}`}
+              className={`pb-1 border-b-2 transition-colors ${
+                sdkTab === 'http'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-base-content/60 hover:text-base-content'
+              }`}
               onClick={() => setSdkTab('http')}
             >
               Direct HTTP
@@ -441,95 +371,65 @@ pnpm install`}
 
 const analytics = new Analytics({
   writeKey: 'any-value',
-  dataPlaneUrl: 'https://icelight-event-ingest.YOUR-SUBDOMAIN.workers.dev'
+  dataPlaneUrl: 'https://your-worker.workers.dev'
 });
 
-// Track events
-analytics.track('Purchase Completed', {
-  orderId: '12345',
-  revenue: 99.99
-});
-
-// Identify users
-analytics.identify('user-123', {
-  email: 'user@example.com',
-  plan: 'premium'
-});`}
+analytics.track('Purchase Completed', { revenue: 99.99 });`}
             />
           )}
 
           {sdkTab === 'http' && (
             <CodeBlock
               language="bash"
-              code={`# Track event
-curl -X POST https://YOUR-WORKER.workers.dev/v1/track \\
+              code={`curl -X POST https://your-worker.workers.dev/v1/track \\
   -H "Content-Type: application/json" \\
-  -d '{"userId":"user-123","event":"Button Clicked","properties":{"button":"signup"}}'
-
-# Batch events
-curl -X POST https://YOUR-WORKER.workers.dev/v1/batch \\
-  -H "Content-Type: application/json" \\
-  -d '{"batch":[
-    {"type":"track","userId":"u1","event":"Page View"},
-    {"type":"identify","userId":"u1","traits":{"name":"John"}}
-  ]}'`}
+  -d '{"userId":"user-123","event":"Button Clicked"}'`}
             />
           )}
         </div>
       </section>
 
       {/* About */}
-      <section className="py-16 px-4">
-        <div className="container mx-auto max-w-3xl text-center">
-          <h2 className="text-2xl font-bold mb-6">About</h2>
-          <p className="text-base-content/70 leading-relaxed mb-4">
-            I built this project to explore the Cloudflare data pipeline and DuckDB, curious to
-            see if I could wire everything together end-to-end — from Analytics.js event capture
-            to fully functional, user-manageable dashboards. Given that most components are still
-            in Beta, this is very much
-            <span className="text-warning font-medium"> use at your own risk</span>, but I think
-            it has a lot of potential!
-          </p>
-          <p className="text-base-content/70 leading-relaxed">
-            If you'd like to use this or contribute, please do — I'm open to conversation!
-            Feel free to{' '}
-            <a href="mailto:clifton@guidemode.dev" className="link link-primary">
-              email me
+      <section className="py-16 px-4 bg-base-200/30">
+        <div className="container mx-auto max-w-2xl text-center">
+          <h2 className="text-2xl font-bold mb-4">About</h2>
+          <p className="text-base-content/60 leading-relaxed">
+            I built this to explore Cloudflare's data pipeline and DuckDB, wiring
+            everything from Analytics.js to working dashboards. Most components are
+            still in beta, so use at your own risk. Questions?{' '}
+            <a href="mailto:clifton@guidemode.dev" className="text-primary hover:underline">
+              Email me
             </a>{' '}
             or{' '}
             <a
               href="https://github.com/cliftonc/icelight/issues"
               target="_blank"
               rel="noopener noreferrer"
-              className="link link-primary"
+              className="text-primary hover:underline"
             >
-              raise an issue on GitHub
+              open an issue
             </a>.
           </p>
         </div>
       </section>
 
-      {/* Footer Links */}
-      <section className="py-12 px-4 bg-base-200">
+      {/* Footer */}
+      <footer className="py-10 px-4">
         <div className="container mx-auto max-w-4xl text-center">
-          <h2 className="text-2xl font-bold mb-6">Resources</h2>
-          <div className="flex flex-wrap justify-center gap-4">
+          <div className="flex flex-wrap justify-center gap-6 text-sm text-base-content/60">
             <a
               href="https://github.com/cliftonc/icelight"
               target="_blank"
               rel="noopener noreferrer"
-              className="btn btn-outline gap-2"
+              className="hover:text-base-content transition-colors"
             >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-              </svg>
               GitHub
             </a>
             <a
               href="https://developers.cloudflare.com/pipelines/"
               target="_blank"
               rel="noopener noreferrer"
-              className="btn btn-outline"
+              className="hover:text-base-content transition-colors"
             >
               Cloudflare Pipelines
             </a>
@@ -537,30 +437,22 @@ curl -X POST https://YOUR-WORKER.workers.dev/v1/batch \\
               href="https://developers.cloudflare.com/r2/data-catalog/"
               target="_blank"
               rel="noopener noreferrer"
-              className="btn btn-outline"
+              className="hover:text-base-content transition-colors"
             >
               R2 Data Catalog
-            </a>
-            <a
-              href="https://developers.cloudflare.com/r2-sql/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-outline"
-            >
-              R2 SQL
             </a>
             <a
               href="https://www.npmjs.com/package/drizzle-cube"
               target="_blank"
               rel="noopener noreferrer"
-              className="btn btn-outline"
+              className="hover:text-base-content transition-colors"
             >
               Drizzle-Cube
             </a>
           </div>
-          <p className="mt-8 text-base-content/50">MIT License</p>
+          <p className="mt-6 text-xs text-base-content/40">MIT License</p>
         </div>
-      </section>
+      </footer>
     </div>
   );
 }

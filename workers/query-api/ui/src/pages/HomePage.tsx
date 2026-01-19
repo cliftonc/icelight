@@ -22,9 +22,10 @@ interface ArchitectureNodeProps {
   sublabel?: string;
   delay?: number;
   isHighlighted?: boolean;
+  badge?: string;
 }
 
-function ArchitectureNode({ label, sublabel, delay = 0, isHighlighted }: ArchitectureNodeProps) {
+function ArchitectureNode({ label, sublabel, delay = 0, isHighlighted, badge }: ArchitectureNodeProps) {
   return (
     <div
       className={`relative px-4 py-3 rounded-lg border-2 transition-all duration-500 ${
@@ -34,6 +35,11 @@ function ArchitectureNode({ label, sublabel, delay = 0, isHighlighted }: Archite
       }`}
       style={{ animationDelay: `${delay}ms` }}
     >
+      {badge && (
+        <span className="absolute -top-2 -right-2 badge badge-xs badge-warning text-[10px]">
+          {badge}
+        </span>
+      )}
       <div className="text-sm font-semibold">{label}</div>
       {sublabel && <div className="text-xs opacity-70">{sublabel}</div>}
     </div>
@@ -94,18 +100,21 @@ function ArchitectureDiagram() {
           label="Cloudflare"
           sublabel="Pipeline"
           isHighlighted={activeStep === 2}
+          badge="Beta"
         />
         <AnimatedArrow isActive={activeStep === 3} />
         <ArchitectureNode
           label="R2 + Iceberg"
           sublabel="Data Catalog"
           isHighlighted={activeStep === 3}
+          badge="Beta"
         />
         <AnimatedArrow isActive={activeStep === 4} />
         <ArchitectureNode
-          label="Query API"
-          sublabel="Worker"
+          label="DuckDB"
+          sublabel="Container"
           isHighlighted={activeStep === 4}
+          badge="Beta"
         />
         <AnimatedArrow isActive={activeStep === 5} />
         <ArchitectureNode
@@ -466,6 +475,37 @@ curl -X POST https://YOUR-WORKER.workers.dev/v1/batch \\
   ]}'`}
             />
           )}
+        </div>
+      </section>
+
+      {/* About */}
+      <section className="py-16 px-4">
+        <div className="container mx-auto max-w-3xl text-center">
+          <h2 className="text-2xl font-bold mb-6">About</h2>
+          <p className="text-base-content/70 leading-relaxed mb-4">
+            I built this project to explore the Cloudflare data pipeline and DuckDB, curious to
+            see if I could wire everything together end-to-end — from Analytics.js event capture
+            to fully functional, user-manageable dashboards. Given that most components are still
+            in Beta, this is very much
+            <span className="text-warning font-medium"> use at your own risk</span>, but I think
+            it has a lot of potential!
+          </p>
+          <p className="text-base-content/70 leading-relaxed">
+            If you'd like to use this or contribute, please do — I'm open to conversation!
+            Feel free to{' '}
+            <a href="mailto:clifton@guidemode.dev" className="link link-primary">
+              email me
+            </a>{' '}
+            or{' '}
+            <a
+              href="https://github.com/cliftonc/icelight/issues"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="link link-primary"
+            >
+              raise an issue on GitHub
+            </a>.
+          </p>
         </div>
       </section>
 

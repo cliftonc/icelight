@@ -27,7 +27,7 @@ export const defaultDashboardConfig: DashboardConfig = {
       filter: {
         member: 'Events.timestamp',
         operator: 'inDateRange' as const,
-        values: ['last 30 days'],
+        values: ['last 6 months'],
       },
     },
   ],
@@ -280,7 +280,7 @@ export const defaultDashboardConfig: DashboardConfig = {
           timeDimensions: [
             {
               dimension: 'Events.timestamp',
-              granularity: 'day',
+              granularity: 'hour',
             },
           ],
         },
@@ -300,7 +300,7 @@ export const defaultDashboardConfig: DashboardConfig = {
         activeView: 'chart',
         charts: {
           query: {
-            chartType: 'radialBar',
+            chartType: 'treemap',
             chartConfig: {
               xAxis: ['Events.type'],
               yAxis: ['Events.count'],

@@ -74,13 +74,15 @@ const confirmed = args.includes('--confirm');
 const savedEnv = loadEnvFile();
 const projectName = savedEnv.CDPFLARE_PROJECT_NAME || 'icelight';
 
-// Derive all names from project name (matching setup-pipeline.ts)
+// Derive all names from project name (matching setup scripts)
 const underscoreName = projectName.replace(/-/g, '_');
 const config = {
   bucketName: `${projectName}-data`,
   streamName: `${underscoreName}_events_stream`,
   sinkName: `${underscoreName}_events_sink`,
   pipelineName: `${underscoreName}_events_pipeline`,
+  kvCacheName: `${projectName}-query-cache`,
+  d1DatabaseName: `${projectName}-dashboards`,
 };
 
 // Worker configs to delete
@@ -90,16 +92,16 @@ const workerLocalConfigs = [
   join(__dirname, '..', 'workers', 'query-api', 'wrangler.local.jsonc'),
 ];
 
-// Worker names (derived from wrangler.jsonc files)
+// Worker names (derived from project name)
 const workerNames = [
-  'icelight-event-ingest',
-  'icelight-duckdb-api',
-  'icelight-query-api',
+  `${projectName}-event-ingest`,
+  `${projectName}-duckdb-api`,
+  `${projectName}-query-api`,
 ];
 
-// Container names (derived from worker name + container binding name)
+// Container names (derived from worker name + container class name)
 const containerNames = [
-  'icelight-duckdb-api-duckdbcontainer',
+  `${projectName}-duckdb-api-duckdbcontainer`,
 ];
 
 function runQuiet(command: string): string | null {
@@ -121,6 +123,9 @@ interface ResourceIds {
   sinkId: string | null;
   pipelineId: string | null;
   containerIds: Map<string, string>;
+  kvCacheId: string | null;
+  kvCachePreviewId: string | null;
+  d1DatabaseId: string | null;
 }
 
 function lookupResourceIds(): ResourceIds {
@@ -129,6 +134,9 @@ function lookupResourceIds(): ResourceIds {
     sinkId: null,
     pipelineId: null,
     containerIds: new Map(),
+    kvCacheId: null,
+    kvCachePreviewId: null,
+    d1DatabaseId: null,
   };
 
   // Look up container IDs
@@ -185,6 +193,39 @@ function lookupResourceIds(): ResourceIds {
         const idMatch = line.match(/([a-f0-9]{32})/i);
         if (idMatch) {
           ids.pipelineId = idMatch[1];
+        }
+        break;
+      }
+    }
+  }
+
+  // Look up KV namespace IDs
+  const kvOutput = runQuiet('npx wrangler kv namespace list');
+  if (kvOutput) {
+    try {
+      const namespaces = JSON.parse(kvOutput) as Array<{ id: string; title: string }>;
+      for (const ns of namespaces) {
+        if (ns.title === config.kvCacheName) {
+          ids.kvCacheId = ns.id;
+        } else if (ns.title === `${config.kvCacheName}_preview`) {
+          ids.kvCachePreviewId = ns.id;
+        }
+      }
+    } catch {
+      // Failed to parse JSON
+    }
+  }
+
+  // Look up D1 database ID
+  const d1Output = runQuiet('npx wrangler d1 list');
+  if (d1Output) {
+    const lines = d1Output.split('\n');
+    for (const line of lines) {
+      if (line.includes(config.d1DatabaseName)) {
+        // D1 database IDs are UUIDs
+        const idMatch = line.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+        if (idMatch) {
+          ids.d1DatabaseId = idMatch[1];
         }
         break;
       }
@@ -379,6 +420,8 @@ async function main() {
   log(`    • Pipeline:   ${config.pipelineName}`);
   log(`    • Sink:       ${config.sinkName}`);
   log(`    • Stream:     ${config.streamName}`);
+  log(`    • KV Cache:   ${config.kvCacheName}`);
+  log(`    • D1 Database: ${config.d1DatabaseName}`);
   if (!keepBucket) {
     log(`    • Bucket:     ${config.bucketName} ${colors.red}(and ALL data!)${colors.reset}`);
   } else {
@@ -451,7 +494,7 @@ async function main() {
     log(`  ⚠ Not found (skipping)`, 'yellow');
   }
 
-  // Step 3: Delete sink
+  // Delete sink
   if (resourceIds.sinkId) {
     run(
       `npx wrangler pipelines sinks delete ${resourceIds.sinkId} --force`,
@@ -473,7 +516,47 @@ async function main() {
     log(`  ⚠ Not found (skipping)`, 'yellow');
   }
 
-  // Step 5: Delete bucket (if not keeping)
+  // Step 5: Delete KV namespaces
+  log('\n┌────────────────────────────────────────────────────────────┐', 'cyan');
+  log('│                 Deleting KV Namespaces                     │', 'cyan');
+  log('└────────────────────────────────────────────────────────────┘', 'cyan');
+
+  if (resourceIds.kvCacheId) {
+    run(
+      `npx wrangler kv namespace delete --namespace-id ${resourceIds.kvCacheId}`,
+      `Deleting KV namespace: ${config.kvCacheName} (${resourceIds.kvCacheId})`
+    );
+  } else {
+    log(`\n> Deleting KV namespace: ${config.kvCacheName}`, 'cyan');
+    log(`  ⚠ Not found (skipping)`, 'yellow');
+  }
+
+  if (resourceIds.kvCachePreviewId) {
+    run(
+      `npx wrangler kv namespace delete --namespace-id ${resourceIds.kvCachePreviewId}`,
+      `Deleting KV preview namespace: ${config.kvCacheName}_preview (${resourceIds.kvCachePreviewId})`
+    );
+  } else {
+    log(`\n> Deleting KV preview namespace: ${config.kvCacheName}_preview`, 'cyan');
+    log(`  ⚠ Not found (skipping)`, 'yellow');
+  }
+
+  // Step 6: Delete D1 database
+  log('\n┌────────────────────────────────────────────────────────────┐', 'cyan');
+  log('│                 Deleting D1 Database                       │', 'cyan');
+  log('└────────────────────────────────────────────────────────────┘', 'cyan');
+
+  if (resourceIds.d1DatabaseId) {
+    run(
+      `npx wrangler d1 delete ${config.d1DatabaseName} --skip-confirmation`,
+      `Deleting D1 database: ${config.d1DatabaseName} (${resourceIds.d1DatabaseId})`
+    );
+  } else {
+    log(`\n> Deleting D1 database: ${config.d1DatabaseName}`, 'cyan');
+    log(`  ⚠ Not found (skipping)`, 'yellow');
+  }
+
+  // Step 7: Delete bucket (if not keeping)
   if (!keepBucket) {
     log('\n┌────────────────────────────────────────────────────────────┐', 'cyan');
     log('│                  Deleting R2 Bucket                        │', 'cyan');
@@ -500,7 +583,7 @@ async function main() {
     );
   }
 
-  // Step 6: Delete local config files
+  // Step 8: Delete local config files
   log('\n┌────────────────────────────────────────────────────────────┐', 'cyan');
   log('│               Deleting Local Config Files                  │', 'cyan');
   log('└────────────────────────────────────────────────────────────┘', 'cyan');
@@ -516,6 +599,8 @@ async function main() {
   log('    ✓ Deleted Cloudflare workers');
   log('    ✓ Deleted Cloudflare containers');
   log('    ✓ Deleted pipeline, sink, and stream');
+  log('    ✓ Deleted KV namespaces');
+  log('    ✓ Deleted D1 database');
   if (!keepBucket) {
     log('    ✓ Emptied and deleted R2 bucket');
   } else {

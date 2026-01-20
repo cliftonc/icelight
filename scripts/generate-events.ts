@@ -3,8 +3,9 @@
  * Generate historical analytics events and send them to the ingest API
  *
  * Usage:
- *   pnpm generate-events           # Generate 30 days of data (default)
- *   pnpm generate-events 90        # Generate 90 days of data
+ *   pnpm generate-events              # Generate 30 days of data, batch size 100
+ *   pnpm generate-events 90           # Generate 90 days of data
+ *   pnpm generate-events 30 1000      # Generate 30 days with batch size 1000
  *
  * Environment variables:
  *   INGEST_API_URL - URL to the ingest API (default: http://localhost:8787)
@@ -49,9 +50,15 @@ async function main() {
   // Parse command line arguments
   const args = process.argv.slice(2);
   const days = args[0] ? parseInt(args[0], 10) : 30;
+  const batchSize = args[1] ? parseInt(args[1], 10) : 100;
 
   if (isNaN(days) || days < 1 || days > 365) {
     log('Error: Days must be a number between 1 and 365', 'red');
+    process.exit(1);
+  }
+
+  if (isNaN(batchSize) || batchSize < 1 || batchSize > 10000) {
+    log('Error: Batch size must be a number between 1 and 10000', 'red');
     process.exit(1);
   }
 
@@ -61,7 +68,8 @@ async function main() {
   log('  Event Generator - Historical Data', 'bold');
   log('='.repeat(60), 'cyan');
   log(`\nGenerating ${days} days of historical events...`, 'yellow');
-  log(`Target ingest API: ${ingestApiUrl}\n`, 'dim');
+  log(`Target ingest API: ${ingestApiUrl}`, 'dim');
+  log(`Batch size: ${batchSize}\n`, 'dim');
 
   // Import the event generator module
   const { generateHistoricalEvents } = await import(
@@ -86,7 +94,7 @@ async function main() {
   // Send events to the ingest API
   log(`\nSending events to ingest API...`, 'yellow');
 
-  const batches = chunk(result.events, 100);
+  const batches = chunk(result.events, batchSize);
   let sent = 0;
   let errors = 0;
 

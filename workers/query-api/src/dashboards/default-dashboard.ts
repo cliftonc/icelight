@@ -34,7 +34,7 @@ export const defaultDashboardConfig: DashboardConfig = {
   portlets: [
     {
       id: 'kpi-total-events',
-      title: 'Total Events',
+      title: 'Daily Events',
       w: 4,
       h: 3,
       x: 0,
@@ -69,7 +69,7 @@ export const defaultDashboardConfig: DashboardConfig = {
     },
     {
       id: 'kpi-unique-users',
-      title: 'Unique Users',
+      title: 'Weekly Uniques',
       w: 4,
       h: 3,
       x: 4,
@@ -81,13 +81,13 @@ export const defaultDashboardConfig: DashboardConfig = {
         activeView: 'chart',
         charts: {
           query: {
-            chartType: 'kpiNumber',
+            chartType: 'kpiDelta',
             chartConfig: {
               yAxis: ['Events.uniqueUsers'],
             },
             displayConfig: {
               decimals: 0,
-              suffix: ' users',
+              suffix: ' weekly users',
             },
           },
         },
@@ -96,7 +96,7 @@ export const defaultDashboardConfig: DashboardConfig = {
           timeDimensions: [
             {
               dimension: 'Events.timestamp',
-              granularity: 'day',
+              granularity: 'week',
             },
           ],
         },
@@ -104,7 +104,7 @@ export const defaultDashboardConfig: DashboardConfig = {
     },
     {
       id: 'kpi-anonymous-users',
-      title: 'Anonymous Users',
+      title: 'Daily Anonymous',
       w: 4,
       h: 3,
       x: 8,

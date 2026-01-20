@@ -16,7 +16,10 @@ SDK/Client → event-ingest Worker → Cloudflare Pipeline → R2 Iceberg
 
 | File | Description |
 |------|-------------|
-| `src/index.ts` | Worker entry point (imports @icelight/ingest) |
+| `src/index.ts` | Worker entry point |
+| `src/handler.ts` | Hono app factory and route handlers |
+| `src/auth.ts` | Authentication middleware |
+| `src/batch.ts` | Event batch processing logic |
 | `wrangler.jsonc` | Wrangler configuration |
 | `package.json` | Dependencies |
 | `tsconfig.json` | TypeScript config |
@@ -25,11 +28,11 @@ SDK/Client → event-ingest Worker → Cloudflare Pipeline → R2 Iceberg
 
 ```typescript
 // src/index.ts
-import { createIngestApp } from '@icelight/ingest';
+import { createIngestApp } from './handler.js';
 export default createIngestApp();
 ```
 
-The worker is a thin wrapper around `@icelight/ingest`.
+This worker is self-contained with all ingestion logic in the `src/` directory.
 
 ## Configuration
 

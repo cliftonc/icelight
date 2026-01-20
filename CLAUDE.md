@@ -24,18 +24,17 @@ icelight/
 │   │       ├── event-schema.ts  # RudderStack/Segment event types
 │   │       ├── validation.ts    # Event validation & flattening
 │   │       └── config.ts        # Configuration types
-│   ├── ingest/                  # @icelight/ingest - Ingestion library
-│   │   └── src/
-│   │       ├── auth.ts          # Hono auth middleware
-│   │       ├── batch.ts         # Batch processing logic
-│   │       └── handler.ts       # Hono app factory
 │   └── query/                   # @icelight/query - Query library
 │       └── src/
 │           ├── sql-proxy.ts     # R2 SQL API client
 │           ├── formatter.ts     # JSON/CSV output formatting
 │           └── handler.ts       # Hono app factory
 ├── workers/                     # Deployable Cloudflare Workers
-│   ├── event-ingest/            # Uses @icelight/ingest
+│   ├── event-ingest/            # Self-contained ingest worker
+│   │   └── src/
+│   │       ├── handler.ts       # Hono app factory and routes
+│   │       ├── auth.ts          # Authentication middleware
+│   │       └── batch.ts         # Event processing logic
 │   └── query-api/               # Uses @icelight/query
 ├── scripts/                     # Infrastructure management
 │   ├── setup-pipeline.ts        # Create R2/Pipeline resources
@@ -311,10 +310,9 @@ wrangler deploy --config <wrangler.jsonc>
 
 ### Add a New Endpoint
 
-1. Add route in `packages/ingest/src/handler.ts` or `packages/query/src/handler.ts`
+1. Add route in `workers/event-ingest/src/handler.ts` or `packages/query/src/handler.ts`
 2. Create handler function with proper typing
-3. Export any new types from `src/index.ts`
-4. Rebuild and typecheck: `pnpm build && pnpm typecheck`
+3. Rebuild and typecheck: `pnpm build && pnpm typecheck`
 
 ### Modify Pipeline Schema
 

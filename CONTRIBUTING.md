@@ -71,14 +71,13 @@ cd icelight
   Shared libraries (npm publishable)
 
   - 📂 `core/` - @icelight/core - Types & validation
-  - 📂 `ingest/` - @icelight/ingest - Ingestion library
   - 📂 `query/` - @icelight/query - Query library
 
 - 📂 `workers/`
 
   Deployable Cloudflare Workers
 
-  - 📂 `event-ingest/` - Uses @icelight/ingest
+  - 📂 `event-ingest/` - Self-contained event ingest worker
   - 📂 `query-api/` - Uses @icelight/query (includes UI)
   - 📂 `duckdb-api/` - DuckDB container API
 

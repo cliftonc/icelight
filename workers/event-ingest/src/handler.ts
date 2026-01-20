@@ -183,8 +183,3 @@ async function sendToPipeline(c: IngestContext, events: FlattenedEvent[]) {
     count: events.length,
   } satisfies IngestResponse);
 }
-
-/**
- * Default export for direct use as a Worker
- */
-export default createIngestApp();

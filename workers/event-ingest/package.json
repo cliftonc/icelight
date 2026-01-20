@@ -6,7 +6,7 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev -c wrangler.local.jsonc",
     "deploy": "if [ -f wrangler.local.jsonc ]; then wrangler deploy -c wrangler.local.jsonc; else echo 'Error: wrangler.local.jsonc not found. Run pnpm launch first.' && exit 1; fi",
     "typecheck": "tsc --noEmit"
   },

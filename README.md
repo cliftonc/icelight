@@ -1,6 +1,6 @@
 # icelight
 
-Stream JSON analytics events to Apache Iceberg tables on Cloudflare's data platform.
+First party product analytics platform.  Stream analytics.js events to Apache Iceberg tables on Cloudflare R2 - a very cost effective replacement for Google Analytics, MixPanel etc.
 
 ## Overview
 

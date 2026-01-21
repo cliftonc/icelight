@@ -1,156 +1,156 @@
 /**
  * Default dashboard configuration for icelight analytics events
  */
-import type { DashboardConfig } from './types.js';
+import type { DashboardConfig } from "./types.js";
 
 /**
  * Default dashboard ID (used for seeding)
  */
-export const DEFAULT_DASHBOARD_ID = 'default-events-dashboard';
+export const DEFAULT_DASHBOARD_ID = "default-events-dashboard";
 
 /**
  * Default dashboard using drizzle-cube AnalysisConfig-based portlets
  */
 export const defaultDashboardConfig: DashboardConfig = {
-  layoutMode: 'rows',
+  layoutMode: "rows",
   grid: {
     cols: 12,
     rowHeight: 90,
     minW: 3,
-    minH: 2,
+    minH: 3,
   },
   filters: [
     {
-      id: 'date-range',
-      label: 'Date Range',
+      id: "date-range",
+      label: "Date Range",
       isUniversalTime: true,
       filter: {
-        member: 'Events.timestamp',
-        operator: 'inDateRange' as const,
-        values: ['last 6 months'],
+        member: "Events.timestamp",
+        operator: "inDateRange" as const,
+        values: ["last 6 months"],
       },
     },
   ],
   portlets: [
     {
-      id: 'kpi-total-events',
-      title: 'Daily Events',
+      id: "kpi-total-events",
+      title: "Daily Events",
       w: 4,
-      h: 3,
+      h: 4,
       x: 0,
       y: 0,
-      dashboardFilterMapping: ['date-range'],
+      dashboardFilterMapping: ["date-range"],
       analysisConfig: {
         version: 1,
-        analysisType: 'query',
-        activeView: 'chart',
+        analysisType: "query",
+        activeView: "chart",
         charts: {
           query: {
-            chartType: 'kpiNumber',
+            chartType: "kpiNumber",
             chartConfig: {
-              yAxis: ['Events.count'],
+              yAxis: ["Events.count"],
             },
             displayConfig: {
               decimals: 0,
-              suffix: ' events',
+              suffix: " events",
             },
           },
         },
         query: {
-          measures: ['Events.count'],
+          measures: ["Events.count"],
           timeDimensions: [
             {
-              dimension: 'Events.timestamp',
-              granularity: 'day',
+              dimension: "Events.timestamp",
+              granularity: "day",
             },
           ],
         },
       },
     },
     {
-      id: 'kpi-unique-users',
-      title: 'Weekly Uniques',
+      id: "kpi-unique-users",
+      title: "Weekly Uniques",
       w: 4,
-      h: 3,
+      h: 4,
       x: 4,
       y: 0,
-      dashboardFilterMapping: ['date-range'],
+      dashboardFilterMapping: ["date-range"],
       analysisConfig: {
         version: 1,
-        analysisType: 'query',
-        activeView: 'chart',
+        analysisType: "query",
+        activeView: "chart",
         charts: {
           query: {
-            chartType: 'kpiDelta',
+            chartType: "kpiDelta",
             chartConfig: {
-              yAxis: ['Events.uniqueUsers'],
+              yAxis: ["Events.uniqueUsers"],
             },
             displayConfig: {
               decimals: 0,
-              suffix: ' weekly users',
+              suffix: " weekly users",
             },
           },
         },
         query: {
-          measures: ['Events.uniqueUsers'],
+          measures: ["Events.uniqueUsers"],
           timeDimensions: [
             {
-              dimension: 'Events.timestamp',
-              granularity: 'week',
+              dimension: "Events.timestamp",
+              granularity: "week",
             },
           ],
         },
       },
     },
     {
-      id: 'kpi-anonymous-users',
-      title: 'Daily Anonymous',
+      id: "kpi-anonymous-users",
+      title: "Daily Anonymous",
       w: 4,
-      h: 3,
+      h: 4,
       x: 8,
       y: 0,
-      dashboardFilterMapping: ['date-range'],
+      dashboardFilterMapping: ["date-range"],
       analysisConfig: {
         version: 1,
-        analysisType: 'query',
-        activeView: 'chart',
+        analysisType: "query",
+        activeView: "chart",
         charts: {
           query: {
-            chartType: 'kpiNumber',
+            chartType: "kpiNumber",
             chartConfig: {
-              yAxis: ['Events.uniqueAnonymous'],
+              yAxis: ["Events.uniqueAnonymous"],
             },
             displayConfig: {
               decimals: 0,
-              suffix: ' visitors',
+              suffix: " visitors",
             },
           },
         },
         query: {
-          measures: ['Events.uniqueAnonymous'],
+          measures: ["Events.uniqueAnonymous"],
           timeDimensions: [
             {
-              dimension: 'Events.timestamp',
-              granularity: 'day',
+              dimension: "Events.timestamp",
+              granularity: "day",
             },
           ],
         },
       },
     },
     {
-      id: 'flow-user-journey',
-      title: 'User Journey Flow',
+      id: "flow-user-journey",
+      title: "User Journey Flow",
       w: 12,
       h: 5,
       x: 0,
-      y: 3,
+      y: 4,
       analysisConfig: {
         version: 1,
-        analysisType: 'flow',
-        activeView: 'chart',
+        analysisType: "flow",
+        activeView: "chart",
         charts: {
           flow: {
-            chartType: 'sankey',
+            chartType: "sankey",
             chartConfig: {},
             displayConfig: {
               showLabels: true,
@@ -159,89 +159,89 @@ export const defaultDashboardConfig: DashboardConfig = {
         },
         query: {
           flow: {
-            bindingKey: 'Events.userId',
-            timeDimension: 'Events.timestamp',
+            bindingKey: "Events.userId",
+            timeDimension: "Events.timestamp",
             startingStep: {
-              name: 'Starting Step',
+              name: "Starting Step",
               filter: {
-                type: 'and',
+                type: "and",
                 filters: [
                   {
-                    member: 'Events.timestamp',
-                    operator: 'inDateRange',
+                    member: "Events.timestamp",
+                    operator: "inDateRange",
                     values: [],
-                    dateRange: 'this month',
+                    dateRange: "this month",
                   },
                   {
-                    member: 'Events.type',
-                    operator: 'equals',
-                    values: ['identify'],
+                    member: "Events.type",
+                    operator: "equals",
+                    values: ["identify"],
                   },
                 ],
               },
             },
             stepsBefore: 3,
             stepsAfter: 5,
-            eventDimension: 'Events.type',
-            outputMode: 'sankey',
-            joinStrategy: 'auto',
+            eventDimension: "Events.type",
+            outputMode: "sankey",
+            joinStrategy: "auto",
           },
         },
       },
     },
     {
-      id: 'funnel-signup-to-purchase',
-      title: 'Signup to Purchase Funnel',
+      id: "funnel-signup-to-purchase",
+      title: "Signup to Purchase Funnel",
       w: 12,
       h: 5,
       x: 0,
-      y: 8,
+      y: 9,
       analysisConfig: {
         version: 1,
-        analysisType: 'funnel',
-        activeView: 'chart',
+        analysisType: "funnel",
+        activeView: "chart",
         charts: {
           funnel: {
-            chartType: 'funnel',
+            chartType: "funnel",
             chartConfig: {},
             displayConfig: {},
           },
         },
         query: {
           funnel: {
-            bindingKey: 'Events.userId',
-            timeDimension: 'Events.timestamp',
+            bindingKey: "Events.userId",
+            timeDimension: "Events.timestamp",
             steps: [
               {
-                name: 'Sign Up',
-                cube: 'Events',
+                name: "Sign Up",
+                cube: "Events",
                 filter: [
                   {
-                    member: 'Events.event',
-                    operator: 'equals',
-                    values: ['Signup Started'],
+                    member: "Events.event",
+                    operator: "equals",
+                    values: ["Signup Started"],
                   },
                 ],
               },
               {
-                name: 'Download',
-                cube: 'Events',
+                name: "Download",
+                cube: "Events",
                 filter: [
                   {
-                    member: 'Events.event',
-                    operator: 'equals',
-                    values: ['File Downloaded'],
+                    member: "Events.event",
+                    operator: "equals",
+                    values: ["File Downloaded"],
                   },
                 ],
               },
               {
-                name: 'Purchase',
-                cube: 'Events',
+                name: "Purchase",
+                cube: "Events",
                 filter: [
                   {
-                    member: 'Events.event',
-                    operator: 'equals',
-                    values: ['Purchase Completed'],
+                    member: "Events.event",
+                    operator: "equals",
+                    values: ["Purchase Completed"],
                   },
                 ],
               },
@@ -252,23 +252,23 @@ export const defaultDashboardConfig: DashboardConfig = {
       },
     },
     {
-      id: 'chart-events-over-time',
-      title: 'Events Over Time',
+      id: "chart-events-over-time",
+      title: "Events Over Time",
       w: 12,
       h: 4,
       x: 0,
-      y: 13,
-      dashboardFilterMapping: ['date-range'],
+      y: 14,
+      dashboardFilterMapping: ["date-range"],
       analysisConfig: {
         version: 1,
-        analysisType: 'query',
-        activeView: 'chart',
+        analysisType: "query",
+        activeView: "chart",
         charts: {
           query: {
-            chartType: 'activityGrid',
+            chartType: "activityGrid",
             chartConfig: {
-              dateField: ['Events.timestamp'],
-              valueField: ['Events.count'],
+              dateField: ["Events.timestamp"],
+              valueField: ["Events.count"],
             },
             displayConfig: {
               showLegend: false,
@@ -276,34 +276,34 @@ export const defaultDashboardConfig: DashboardConfig = {
           },
         },
         query: {
-          measures: ['Events.count'],
+          measures: ["Events.count"],
           timeDimensions: [
             {
-              dimension: 'Events.timestamp',
-              granularity: 'hour',
+              dimension: "Events.timestamp",
+              granularity: "hour",
             },
           ],
         },
       },
     },
     {
-      id: 'chart-events-by-type',
-      title: 'Events by Type',
+      id: "chart-events-by-type",
+      title: "Events by Type",
       w: 6,
       h: 4,
       x: 0,
-      y: 17,
-      dashboardFilterMapping: ['date-range'],
+      y: 18,
+      dashboardFilterMapping: ["date-range"],
       analysisConfig: {
         version: 1,
-        analysisType: 'query',
-        activeView: 'chart',
+        analysisType: "query",
+        activeView: "chart",
         charts: {
           query: {
-            chartType: 'treemap',
+            chartType: "treemap",
             chartConfig: {
-              xAxis: ['Events.type'],
-              yAxis: ['Events.count'],
+              xAxis: ["Events.type"],
+              yAxis: ["Events.count"],
             },
             displayConfig: {
               showLegend: true,
@@ -311,38 +311,38 @@ export const defaultDashboardConfig: DashboardConfig = {
           },
         },
         query: {
-          measures: ['Events.count'],
-          dimensions: ['Events.type'],
+          measures: ["Events.count"],
+          dimensions: ["Events.type"],
           order: {
-            'Events.count': 'desc',
+            "Events.count": "desc",
           },
         },
       },
     },
     {
-      id: 'grid-top-events',
-      title: 'Top Event Names',
+      id: "grid-top-events",
+      title: "Top Event Names",
       w: 6,
       h: 4,
       x: 6,
-      y: 17,
-      dashboardFilterMapping: ['date-range'],
+      y: 18,
+      dashboardFilterMapping: ["date-range"],
       analysisConfig: {
         version: 1,
-        analysisType: 'query',
-        activeView: 'chart',
+        analysisType: "query",
+        activeView: "chart",
         charts: {
           query: {
-            chartType: 'table',
+            chartType: "table",
             chartConfig: {},
             displayConfig: {},
           },
         },
         query: {
-          measures: ['Events.count'],
-          dimensions: ['Events.event'],
+          measures: ["Events.count"],
+          dimensions: ["Events.event"],
           order: {
-            'Events.count': 'desc',
+            "Events.count": "desc",
           },
           limit: 10,
         },
@@ -356,8 +356,9 @@ export const defaultDashboardConfig: DashboardConfig = {
  */
 export const defaultDashboardRecord = {
   id: DEFAULT_DASHBOARD_ID,
-  name: 'Events Overview',
-  description: 'Default analytics dashboard showing key event metrics and trends',
+  name: "Events Dashboard",
+  description:
+    "Default analytics dashboard showing key event metrics and trends.  This is an example only, you could easily embed this in your own UI where your users could create / edit / share their own dashboards and analysis.",
   config: defaultDashboardConfig,
   displayOrder: 0,
   isActive: true,

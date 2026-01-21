@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type {
   DashboardRecord,
+  DashboardConfig,
   DashboardListResponse,
   DashboardResponse,
   CreateDashboardRequest,
@@ -202,6 +203,54 @@ export function useResetDashboard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dashboards'] })
+    }
+  })
+}
+
+// Fetch the default dashboard config template (for creating new dashboards)
+export function useDefaultDashboardConfig() {
+  return useQuery({
+    queryKey: ['dashboards', 'config', 'default'],
+    queryFn: async (): Promise<DashboardConfig> => {
+      const response = await fetch(`${API_BASE}/config/default`)
+      if (!response.ok) {
+        throw new Error('Failed to fetch default config')
+      }
+      const data: { success: boolean; data: DashboardConfig } = await response.json()
+      if (!data.success) {
+        throw new Error('Failed to fetch default config')
+      }
+      return data.data
+    }
+  })
+}
+
+// Reset any dashboard to the default config
+export function useResetDashboardById() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string): Promise<DashboardRecord> => {
+      const response = await fetch(`${API_BASE}/${id}/reset`, {
+        method: 'POST'
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to reset dashboard')
+      }
+
+      const data: DashboardResponse = await response.json()
+      if (!data.success || !data.data) {
+        throw new Error(data.error || 'Failed to reset dashboard')
+      }
+      return data.data
+    },
+    onSuccess: (updatedDashboard, id) => {
+      // Update the cache directly with the mutation result
+      queryClient.setQueryData(['dashboards', id], updatedDashboard)
+      // Invalidate the list and default to refresh
+      queryClient.invalidateQueries({ queryKey: ['dashboards'], exact: true })
+      queryClient.invalidateQueries({ queryKey: ['dashboards', 'default'] })
     }
   })
 }

@@ -2,14 +2,31 @@ import { useEffect, useState } from 'react';
 import { setTheme } from 'drizzle-cube/client';
 
 const THEME_STORAGE_KEY = 'icelight-theme';
+const VALID_THEMES = ['light', 'night'] as const;
+const DEFAULT_THEME = 'night';
+
+function getValidTheme(): 'light' | 'night' {
+  try {
+    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    if (savedTheme && VALID_THEMES.includes(savedTheme as typeof VALID_THEMES[number])) {
+      return savedTheme as 'light' | 'night';
+    }
+    // Invalid or missing theme - clean up and use default
+    if (savedTheme !== null) {
+      localStorage.removeItem(THEME_STORAGE_KEY);
+    }
+  } catch {
+    // localStorage not available or error - ignore
+  }
+  return DEFAULT_THEME;
+}
 
 export default function ThemeToggle() {
   const [isLight, setIsLight] = useState(false);
 
   // Initialize theme from localStorage on mount
   useEffect(() => {
-    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-    const theme = savedTheme || 'night'; // Default to night (blue-toned dark theme)
+    const theme = getValidTheme();
 
     // Apply theme to document
     document.documentElement.setAttribute('data-theme', theme);

@@ -12,29 +12,25 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api/query': {
+      '/query': {
         target: 'https://icelight-query-api.clifton-cunningham.workers.dev',
         changeOrigin: true,
         secure: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
       },
-      '/api/tables': {
+      '/tables': {
         target: 'https://icelight-query-api.clifton-cunningham.workers.dev',
         changeOrigin: true,
         secure: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
       },
-      '/api/health': {
+      '/health': {
         target: 'https://icelight-query-api.clifton-cunningham.workers.dev',
         changeOrigin: true,
         secure: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
       },
-      '/api/duckdb': {
+      '/duckdb': {
         target: 'https://icelight-query-api.clifton-cunningham.workers.dev',
         changeOrigin: true,
         secure: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
       },
       // Proxy ingest API routes for local development
       '/v1': {

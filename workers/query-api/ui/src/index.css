@@ -1,10 +1,10 @@
-@source "../index.html";
-@source "./**/*.{ts,tsx,js,jsx}";
 @import "tailwindcss";
 @import "drizzle-cube/client/styles.css";
 @plugin "daisyui" {
   themes: all;
 }
+
+@config "../tailwind.config.js";
 
 /* ============================================================================
    Drizzle Cube Theme Variables

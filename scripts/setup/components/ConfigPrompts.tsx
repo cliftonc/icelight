@@ -46,7 +46,7 @@ export function ConfigPrompts({
 
     // Save if different from saved
     if (name !== getSavedProjectName()) {
-      saveToEnvFile('CDPFLARE_PROJECT_NAME', name);
+      saveToEnvFile('ICELIGHT_PROJECT_NAME', name);
     }
 
     // Check if we need token
@@ -60,7 +60,7 @@ export function ConfigPrompts({
   const handleTokenSubmit = (value: string) => {
     if (value.trim()) {
       setApiToken(value.trim());
-      saveToEnvFile('CDPFLARE_API_TOKEN', value.trim());
+      saveToEnvFile('ICELIGHT_API_TOKEN', value.trim());
       finishSetup(projectName, value.trim());
     }
   };

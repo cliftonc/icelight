@@ -21,7 +21,7 @@ export const DEFAULT_PROJECT_NAME = 'icelight';
  */
 export function getProjectName(): string {
   const savedEnv = loadEnvFile();
-  return savedEnv.CDPFLARE_PROJECT_NAME || DEFAULT_PROJECT_NAME;
+  return savedEnv.ICELIGHT_PROJECT_NAME || savedEnv.CDPFLARE_PROJECT_NAME || DEFAULT_PROJECT_NAME;
 }
 
 /**

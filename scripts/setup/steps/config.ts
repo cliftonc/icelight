@@ -16,7 +16,7 @@ export const DEFAULT_PROJECT_NAME = 'icelight';
  */
 export function getSavedProjectName(): string {
   const savedEnv = loadEnvFile();
-  return savedEnv.CDPFLARE_PROJECT_NAME || DEFAULT_PROJECT_NAME;
+  return savedEnv.ICELIGHT_PROJECT_NAME || savedEnv.CDPFLARE_PROJECT_NAME || DEFAULT_PROJECT_NAME;
 }
 
 /**
@@ -44,7 +44,7 @@ export async function gatherConfig(): Promise<{ projectName: string; config: Con
 
   // Save project name for future runs if changed
   if (projectName !== savedProjectName) {
-    saveToEnvFile('CDPFLARE_PROJECT_NAME', projectName);
+    saveToEnvFile('ICELIGHT_PROJECT_NAME', projectName);
   }
 
   const config = deriveConfig(projectName);

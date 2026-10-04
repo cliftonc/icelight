@@ -10,7 +10,7 @@ import { promptApiToken } from '../core/prompts.js';
  */
 export function getSavedApiToken(): string {
   const savedEnv = loadEnvFile();
-  return savedEnv.CDPFLARE_API_TOKEN || '';
+  return savedEnv.ICELIGHT_API_TOKEN || savedEnv.CDPFLARE_API_TOKEN || '';
 }
 
 /**
@@ -25,7 +25,7 @@ export async function collectApiToken(forcePrompt = false): Promise<string> {
 
   const token = await promptApiToken();
   if (token) {
-    saveToEnvFile('CDPFLARE_API_TOKEN', token);
+    saveToEnvFile('ICELIGHT_API_TOKEN', token);
   }
   return token;
 }

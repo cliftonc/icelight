@@ -71,19 +71,14 @@ cd icelight
   Shared libraries (npm publishable)
 
   - 📂 `core/` - @icelight/core - Types & validation
-  - 📂 `query/` - @icelight/query - Query library
+  - 📂 `sql-guard/` - @icelight/sql-guard - SQL validation for the query API
 
 - 📂 `workers/`
 
   Deployable Cloudflare Workers
 
   - 📂 `event-ingest/` - Self-contained event ingest worker
-  - 📂 `query-api/` - Uses @icelight/query (includes UI)
-  - 📂 `duckdb-api/` - DuckDB container API
-
-- 📂 `container/`
-
-  DuckDB container for query execution
+  - 📂 `query-api/` - Basin SQL query API, drizzle-cube semantic layer and UI
 
 - 📂 `scripts/`
 
@@ -126,9 +121,9 @@ All commit messages should follow the pattern below:
 Example:
 
 ```
-Add DuckDB health check endpoint
+Add Basin SQL bytes-scanned metrics
 
-Enables monitoring of DuckDB container status
+Surfaces bytes and files scanned per query
 from the query API worker
 ```
 
@@ -146,7 +141,7 @@ from the query API worker
    Examples:
 
    ```
-   [Query API] Add DuckDB health check endpoint
+   [Query API] Add Basin SQL bytes-scanned metrics
    [Ingest] Improve batch event validation
    [UI] Add dashboard export feature
    ```

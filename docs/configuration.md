@@ -15,23 +15,32 @@
 | Variable | Type | Required | Description |
 |----------|------|----------|-------------|
 | `CF_ACCOUNT_ID` | secret | Yes | Your Cloudflare account ID |
-| `CF_API_TOKEN` | secret | Yes | Cloudflare API token with R2 SQL permissions |
-| `WAREHOUSE_NAME` | string | Yes | R2 SQL warehouse name (usually same as bucket name) |
+| `CF_API_TOKEN` | secret | Yes | Cloudflare API token with Basin SQL permissions |
+| `WAREHOUSE_NAME` | string | Yes | Basin Catalog warehouse, `<account-id>_<bucket>` (from `wrangler basin catalog get <bucket>`) |
 | `API_TOKEN` | secret | No | Optional Bearer token for query API authentication |
 | `ALLOWED_ORIGINS` | string | `"*"` | Comma-separated list of allowed CORS origins |
 
-### Pipeline Setup Script
+### Setup Script (`.env`)
+
+`pnpm launch` stores these in `.env` at the repo root:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BUCKET_NAME` | `icelight-data` | R2 bucket name |
-| `PIPELINE_NAME` | `icelight-events-pipeline` | Pipeline name |
-| `STREAM_NAME` | `icelight-events-stream` | Stream name |
-| `SINK_NAME` | `icelight-events-sink` | Sink name |
-| `NAMESPACE` | `analytics` | Iceberg namespace |
-| `TABLE_NAME` | `events` | Iceberg table name |
-| `COMPRESSION` | `zstd` | Parquet compression (zstd, snappy, gzip, none) |
-| `ROLL_INTERVAL` | `60` | Seconds between Parquet file writes |
+| `ICELIGHT_PROJECT_NAME` | `icelight` | Project name; all resource names derive from it |
+| `ICELIGHT_API_TOKEN` | - | API token used for the sink, Basin SQL and worker secrets |
+
+Resource names derived from the project name (e.g. `icelight`):
+
+| Resource | Name |
+|----------|------|
+| R2 bucket (Basin Catalog enabled) | `icelight-data` |
+| Basin Pipelines stream | `icelight_events_stream` |
+| Basin Pipelines sink | `icelight_events_sink` (Iceberg table `analytics.events`, 60s roll interval) |
+| Basin pipeline | `icelight_events_pipeline` (`INSERT INTO <sink> SELECT * FROM <stream>`) |
+| KV namespace | `icelight-query-cache` |
+| D1 database | `icelight-dashboards` |
+
+`pnpm generate-events` reads `INGEST_API_URL` (default `http://localhost:8787`).
 
 ## Wrangler Configuration
 
@@ -41,7 +50,7 @@
 {
   "name": "icelight-event-ingest",
   "main": "src/index.ts",
-  "compatibility_date": "2024-01-01",
+  "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
 
   "vars": {
@@ -49,11 +58,12 @@
     "ALLOWED_ORIGINS": "*"
   },
 
-  // Uncomment after running pnpm launch
+  // Added to wrangler.local.jsonc by pnpm launch.
+  // The binding points at the Basin Pipelines *stream* ID (the older `pipeline` field is deprecated).
   "pipelines": [
     {
-      "pipeline": "icelight-events-pipeline",
-      "binding": "PIPELINE"
+      "binding": "PIPELINE",
+      "stream": "<STREAM_ID>"
     }
   ]
 }
@@ -65,13 +75,18 @@
 {
   "name": "icelight-query-api",
   "main": "src/index.ts",
-  "compatibility_date": "2024-01-01",
+  "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
 
   "vars": {
-    "WAREHOUSE_NAME": "your-warehouse-name"
-  }
+    "WAREHOUSE_NAME": "<account-id>_<bucket>"
+  },
   // CF_ACCOUNT_ID, CF_API_TOKEN set via wrangler secret
+
+  // Proxies /v1/* to the ingest worker (used by the UI's event simulator and the daily cron)
+  "services": [
+    { "binding": "INGEST_API", "service": "icelight-event-ingest", "remote": true }
+  ]
 }
 ```
 
@@ -131,7 +146,12 @@ Use `"*"` to allow all origins (not recommended for production).
 Create an API token at [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens) with:
 
 - **Account** → Workers R2 Storage → Edit
+- **Account** → Basin Catalog (Workers R2 Data Catalog) → Edit
+- **Account** → Basin SQL (Workers R2 SQL) → Read
+- **Account** → Workers Scripts → Read
 - **Account** → Account Analytics → Read (optional, for monitoring)
+
+The API permission groups still use the "Workers R2" names; the dashboard may show the Basin names.
 
 ## Custom Domain
 

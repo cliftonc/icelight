@@ -2,45 +2,53 @@
 
 ## Project Overview
 
-**icelight** is a Cloudflare Data Platform library that streams JSON analytics events to Apache Iceberg tables. It provides RudderStack/Segment-compatible HTTP endpoints for event ingestion and a query API for SQL access via R2 SQL.
+**icelight** is a Cloudflare Basin library that streams JSON analytics events to Apache Iceberg tables. It provides RudderStack/Segment-compatible HTTP endpoints for event ingestion and a query API (SQL + drizzle-cube semantic layer) on Basin SQL.
+
+Cloudflare Basin (GA 2026-10-01) is the renamed Cloudflare Data Platform: **Basin Pipelines** (formerly Pipelines), **Basin Catalog** (formerly R2 Data Catalog) and **Basin SQL** (formerly R2 SQL).
 
 ### Architecture
 
 ```
-Client/SDK → Event Ingest Worker → Cloudflare Pipeline → R2 + Iceberg → Query API Worker
+Client/SDK → Event Ingest Worker → Basin Pipelines (stream → pipeline → sink) → R2 + Iceberg (Basin Catalog) → Basin SQL ← Query API Worker
 ```
 
-- **Event Ingestion**: Hono-based worker accepting analytics events
-- **Data Storage**: Cloudflare Pipelines write to R2 as Iceberg tables
-- **Querying**: R2 SQL API proxy or external engines (PyIceberg, DuckDB)
+- **Event Ingestion**: Hono-based worker accepting analytics events, sending to a Basin Pipelines stream binding
+- **Data Storage**: Basin Pipelines sink writes Parquet/Iceberg to R2, managed by Basin Catalog
+- **Querying**: Basin SQL for raw SQL and the drizzle-cube semantic layer; external engines (PyIceberg, DuckDB, Spark) can read via the Basin Catalog Iceberg REST endpoint
 
 ## Repository Structure
 
 ```
 icelight/
-├── packages/                    # Shared libraries (npm publishable)
+├── packages/                    # Shared libraries
 │   ├── core/                    # @icelight/core - Types & validation
 │   │   └── src/
 │   │       ├── event-schema.ts  # RudderStack/Segment event types
 │   │       ├── validation.ts    # Event validation & flattening
 │   │       └── config.ts        # Configuration types
-│   └── query/                   # @icelight/query - Query library
-│       └── src/
-│           ├── sql-proxy.ts     # R2 SQL API client
-│           ├── formatter.ts     # JSON/CSV output formatting
-│           └── handler.ts       # Hono app factory
+│   └── sql-guard/               # @icelight/sql-guard - SQL validation for /query
 ├── workers/                     # Deployable Cloudflare Workers
 │   ├── event-ingest/            # Self-contained ingest worker
 │   │   └── src/
 │   │       ├── handler.ts       # Hono app factory and routes
 │   │       ├── auth.ts          # Authentication middleware
 │   │       └── batch.ts         # Event processing logic
-│   └── query-api/               # Uses @icelight/query
+│   └── query-api/               # Query API, semantic layer and UI
+│       ├── src/query/
+│       │   ├── handler.ts       # Hono app factory (createQueryApp)
+│       │   ├── basin-sql.ts     # Basin SQL REST client
+│       │   ├── basin-drizzle.ts # drizzle pg-proxy driver for drizzle-cube on Basin SQL
+│       │   ├── formatter.ts     # JSON/CSV output formatting
+│       │   ├── schema/          # Drizzle schema (analytics.events)
+│       │   └── cubes/           # drizzle-cube definitions + JSON helpers
+│       └── ui/                  # Vite + React query explorer
 ├── scripts/                     # Infrastructure management
-│   ├── setup-pipeline.ts        # Create R2/Pipeline resources
-│   └── teardown.ts              # Delete resources
+│   ├── setup/                   # pnpm launch (Ink UI): Basin resources, deploy, demo seed
+│   ├── teardown/                # pnpm teardown (also removes legacy DuckDB worker/container)
+│   ├── shared/                  # Shared Ink components + seed-events.ts
+│   └── generate-events.ts       # pnpm generate-events (demo data)
 ├── templates/                   # Configuration templates
-│   ├── schema.events.json       # Pipeline event schema
+│   ├── schema.events.json       # Basin Pipelines stream schema
 │   └── .env.example             # Environment template
 └── docs/                        # Documentation
 ```
@@ -50,12 +58,12 @@ icelight/
 **IMPORTANT**: Workers use `wrangler.local.jsonc` for deployment, NOT `wrangler.jsonc`.
 
 - `wrangler.jsonc` - Template/example config (committed to git)
-- `wrangler.local.jsonc` - Actual config with pipeline bindings (gitignored, created by `pnpm launch`)
+- `wrangler.local.jsonc` - Actual config with stream bindings, warehouse name, KV/D1 IDs (gitignored, created by `pnpm launch`)
 
-The `pnpm launch` script creates `wrangler.local.jsonc` files in each worker directory with the correct pipeline/stream IDs for your Cloudflare account.
+The `pnpm launch` script creates `wrangler.local.jsonc` files in each worker directory with the correct Basin stream ID and warehouse for your Cloudflare account.
 
 ```bash
-# This creates wrangler.local.jsonc files with your pipeline bindings
+# This creates wrangler.local.jsonc files with your stream bindings
 pnpm launch
 
 # Deploy commands automatically use wrangler.local.jsonc
@@ -63,7 +71,7 @@ pnpm deploy:ingest   # Uses workers/event-ingest/wrangler.local.jsonc
 pnpm deploy:query    # Uses workers/query-api/wrangler.local.jsonc
 ```
 
-When debugging deployment issues, always check `wrangler.local.jsonc` (not `wrangler.jsonc`) to verify pipeline bindings are configured.
+When debugging deployment issues, always check `wrangler.local.jsonc` (not `wrangler.jsonc`) to verify the stream binding (`"pipelines": [{ "binding": "PIPELINE", "stream": "<STREAM_ID>" }]`) is configured.
 
 ## Build & Development Commands
 
@@ -89,8 +97,11 @@ pnpm deploy:query
 pnpm deploy:all
 
 # Infrastructure
-pnpm launch     # Create R2 bucket, pipeline, etc.
+pnpm launch     # Create R2 bucket, Basin Catalog, stream/sink/pipeline, deploy workers, seed demo data
 pnpm teardown   # Delete infrastructure
+
+# Demo data
+INGEST_API_URL=<ingest url> pnpm generate-events [days] [batchSize]
 ```
 
 ## Tech Stack
@@ -138,7 +149,7 @@ export default createIngestApp();
 ```typescript
 // Define environment bindings
 interface IngestEnv {
-  PIPELINE: PipelineBinding;
+  PIPELINE?: PipelineBinding;
   AUTH_ENABLED?: string;
   AUTH_TOKEN?: string;
 }
@@ -197,9 +208,10 @@ interface FlattenedEvent {
 ### Pipeline Binding
 
 ```typescript
-// Cloudflare Pipeline binding interface
+// Basin Pipelines stream binding (matches Pipeline<T> from "cloudflare:pipelines")
+// wrangler: "pipelines": [{ "binding": "PIPELINE", "stream": "<STREAM_ID>" }]
 interface PipelineBinding {
-  send(messages: unknown[]): Promise<void>;
+  send(records: FlattenedEvent[]): Promise<void>;
 }
 ```
 
@@ -208,7 +220,7 @@ interface PipelineBinding {
 ```typescript
 // Ingest worker
 interface IngestEnv {
-  PIPELINE: PipelineBinding;
+  PIPELINE?: PipelineBinding;
   AUTH_ENABLED?: string;
   AUTH_TOKEN?: string;
   ALLOWED_ORIGINS?: string;
@@ -218,9 +230,13 @@ interface IngestEnv {
 interface QueryEnv {
   CF_ACCOUNT_ID: string;
   CF_API_TOKEN: string;
-  WAREHOUSE_NAME: string;
+  WAREHOUSE_NAME: string;   // Basin Catalog warehouse: <account-id>_<bucket>
   API_TOKEN?: string;
   ALLOWED_ORIGINS?: string;
+  INGEST_API?: Fetcher;     // Service binding to ingest worker (/v1/* proxy, cron)
+  INGEST_API_URL?: string;
+  CACHE?: KVNamespace;      // drizzle-cube query cache
+  DB?: D1Database;          // Dashboard storage
 }
 ```
 
@@ -266,31 +282,45 @@ curl -X POST http://localhost:8788/query \
 
 ## Cloudflare Resources
 
-### Pipelines (Beta)
+Cloudflare Basin has been GA since 2026-10-01 and is billed per use ([pricing](https://developers.cloudflare.com/basin/platform/pricing/)). Basin Pipelines requires the Workers Paid plan.
 
-- Pipelines are in open beta - API may change
-- Pipeline binding requires pipeline to be created first via `pnpm launch`
-- Immutable: streams, sinks, and pipelines cannot be modified, only deleted/recreated
+### Basin Pipelines (formerly Pipelines)
 
-### R2 SQL (Beta)
+- Stream binding requires the stream to be created first via `pnpm launch`
+- Immutable: stream schemas, sinks and pipeline SQL cannot be modified, only deleted/recreated
+- Events that don't match the stream schema are accepted at ingest but dropped during processing
+- Limits: 20 streams/sinks/pipelines per account, 5 MB per request, 1 GB/s per stream
+- Sink type is still `r2-data-catalog` in wrangler (docs also mention `basin-catalog`); Iceberg sinks need a roll interval of at least 60s
+- `wrangler basin pipelines sinks list --json` prints a JS object literal, not strict JSON - `parseBasinList()` in `scripts/setup/core/wrangler.ts` handles both
 
-- Currently read-only (SELECT only)
-- No joins between tables (coming H1 2026)
-- No aggregations (coming H1 2026)
-- Use external engines for complex queries
+### Basin SQL (formerly R2 SQL)
+
+- Read-only (SELECT, SHOW, DESCRIBE, EXPLAIN)
+- Supports aggregations, GROUP BY/HAVING, joins, CTEs, window functions, set operations, JSON functions (`json_get_str`, `json_get_float`, ...)
+- No `OFFSET` (emulated in `basin-drizzle.ts`), `UNNEST`, `PIVOT`, `LATERAL`; no bound parameters (inlined in `basin-drizzle.ts`)
+- Default `LIMIT 500`; billed at $2.50/TB compressed bytes scanned (10 MB minimum per query)
+- REST: `POST https://api.sql.cloudflarestorage.com/api/v1/accounts/<account-id>/basin-sql/query/<bucket>` with `{ warehouse, query }`
 
 ### Wrangler Commands Reference
 
-```bash
-# R2
-wrangler r2 bucket create <name>
-wrangler r2 bucket catalog enable <name>
-wrangler r2 sql query "<warehouse>" "<sql>"
+Requires wrangler 4.145.0+ (repo pins `^4.147.0`). The old `wrangler pipelines`, `wrangler r2 bucket catalog` and `wrangler r2 sql` commands are hidden aliases.
 
-# Pipelines
-wrangler pipelines stream create <name> --schema-file <path>
-wrangler pipelines sink create <name> --type r2-data-catalog --bucket <bucket>
-wrangler pipelines create <name> --r2 <bucket>
+```bash
+# R2 + Basin Catalog
+wrangler r2 bucket create <name>
+wrangler basin catalog enable <bucket>
+wrangler basin catalog get <bucket>          # Catalog URI + warehouse name
+
+# Basin SQL (needs WRANGLER_BASIN_SQL_AUTH_TOKEN or CLOUDFLARE_API_TOKEN)
+wrangler basin sql query "<warehouse>" "<sql>"
+
+# Basin Pipelines
+wrangler basin pipelines streams create <name> --schema-file <path> --http-enabled true --http-auth false
+wrangler basin pipelines sinks create <name> --type r2-data-catalog --bucket <bucket> \
+  --namespace analytics --table events --roll-interval 60 --catalog-token <token>
+wrangler basin pipelines create <name> --sql "INSERT INTO <sink> SELECT * FROM <stream>"
+wrangler basin pipelines {streams,sinks,} list --json
+wrangler basin pipelines {streams,sinks,} delete <id> --force
 
 # Secrets
 wrangler secret put <NAME> --config <wrangler.jsonc>
@@ -310,7 +340,7 @@ wrangler deploy --config <wrangler.jsonc>
 
 ### Add a New Endpoint
 
-1. Add route in `workers/event-ingest/src/handler.ts` or `packages/query/src/handler.ts`
+1. Add route in `workers/event-ingest/src/handler.ts` or `workers/query-api/src/query/handler.ts`
 2. Create handler function with proper typing
 3. Rebuild and typecheck: `pnpm build && pnpm typecheck`
 
@@ -319,7 +349,8 @@ wrangler deploy --config <wrangler.jsonc>
 1. Update `templates/schema.events.json`
 2. Update `FlattenedEvent` type in `packages/core/src/event-schema.ts`
 3. Update `flattenEvent()` in `packages/core/src/validation.ts`
-4. **Note**: Existing pipelines cannot be modified - must teardown and recreate
+4. Update `workers/query-api/src/query/schema/events.ts` (and cubes if needed)
+5. **Note**: Existing streams/sinks/pipelines cannot be modified - must teardown and recreate
 
 ### Add New Configuration Option
 
@@ -333,14 +364,16 @@ wrangler deploy --config <wrangler.jsonc>
 - Use `console.log()` in Workers - visible in `wrangler dev` output
 - Check Cloudflare dashboard for deployed worker logs
 - Use `--local` flag with wrangler for fully local testing
-- Pipeline errors appear in Cloudflare dashboard under Pipelines
+- Pipeline errors (including dropped events that don't match the schema) appear in the Cloudflare dashboard under Basin Pipelines
+- Use `wrangler basin sql query` to check what has landed in `analytics.events`
 
 ## Dependencies
 
 ### Core Dependencies
 
 - `hono` - Web framework for Workers
-- No other runtime dependencies (keeps bundle small)
+- `drizzle-orm` (`^0.45`) + `drizzle-cube` (`^0.10.1`) - Semantic layer in query-api (runs on Basin SQL via `drizzle-orm/pg-proxy`)
+- `@icelight/sql-guard` - SQL validation for `/query`
 
 ### Dev Dependencies
 
@@ -352,8 +385,11 @@ wrangler deploy --config <wrangler.jsonc>
 
 ## Links
 
-- [Cloudflare Pipelines Docs](https://developers.cloudflare.com/pipelines/)
-- [R2 Data Catalog](https://developers.cloudflare.com/r2/data-catalog/)
-- [R2 SQL](https://developers.cloudflare.com/r2-sql/)
+- [Cloudflare Basin](https://developers.cloudflare.com/basin/)
+- [Basin Pipelines](https://developers.cloudflare.com/basin-pipelines/)
+- [Basin Catalog](https://developers.cloudflare.com/basin-catalog/)
+- [Basin SQL](https://developers.cloudflare.com/basin-sql/)
+- [Basin Pricing](https://developers.cloudflare.com/basin/platform/pricing/)
+- [Drizzle Cube](https://try.drizzle-cube.dev)
 - [Hono Documentation](https://hono.dev/)
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/)

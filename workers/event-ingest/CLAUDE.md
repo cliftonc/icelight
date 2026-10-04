@@ -4,12 +4,12 @@ Cloudflare Worker for analytics event ingestion.
 
 ## Purpose
 
-Deployable worker that receives analytics events from SDKs (RudderStack, Segment, custom) and forwards them to a Cloudflare Pipeline for storage in Iceberg tables.
+Deployable worker that receives analytics events from SDKs (RudderStack, Segment, custom) and forwards them to a Basin Pipelines stream for storage in Iceberg tables (Basin Catalog).
 
 ## Architecture
 
 ```
-SDK/Client → event-ingest Worker → Cloudflare Pipeline → R2 Iceberg
+SDK/Client → event-ingest Worker → Basin Pipelines stream → sink → R2 Iceberg (Basin Catalog)
 ```
 
 ## Files
@@ -42,19 +42,20 @@ This worker is self-contained with all ingestion logic in the `src/` directory.
 {
   "name": "icelight-event-ingest",
   "main": "src/index.ts",
-  // IMPORTANT: 2025-01-01 or later required for Pipelines send() method
-  "compatibility_date": "2025-01-01",
+  // 2025-01-01 or later is required for the Basin Pipelines send() method
+  "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
 
   "vars": {
     "AUTH_ENABLED": "false"
   },
 
-  // Configure after running pnpm launch with your stream ID
+  // Added to wrangler.local.jsonc by pnpm launch (stream ID, not pipeline ID).
+  // The older `pipeline` field is deprecated in favour of `stream`.
   "pipelines": [
     {
-      "pipeline": "icelight-events-pipeline",
-      "binding": "PIPELINE"
+      "binding": "PIPELINE",
+      "stream": "<STREAM_ID>"
     }
   ]
 }
@@ -64,7 +65,7 @@ This worker is self-contained with all ingestion logic in the `src/` directory.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `PIPELINE` | Yes | Pipeline binding (configured in wrangler.jsonc) |
+| `PIPELINE` | Yes | Basin Pipelines stream binding (configured in wrangler.local.jsonc) |
 | `AUTH_ENABLED` | No | Set to "true" to require authentication |
 | `AUTH_TOKEN` | If auth enabled | Secret token (set via `wrangler secret`) |
 | `ALLOWED_ORIGINS` | No | Comma-separated CORS origins (default: "*") |
@@ -97,12 +98,12 @@ pnpm deploy
 
 ## Setup Steps
 
-1. **Create pipeline infrastructure**:
+1. **Create Basin infrastructure** (stream, sink, pipeline) and `wrangler.local.jsonc`:
    ```bash
    pnpm launch  # From root
    ```
 
-2. **Uncomment pipeline binding** in `wrangler.jsonc`
+2. **Check the stream binding** in `wrangler.local.jsonc` (`wrangler basin pipelines streams list` shows the stream ID)
 
 3. **Set secrets** (if using auth):
    ```bash
@@ -131,7 +132,7 @@ curl -X POST http://localhost:8787/v1/batch \
   -d '{"batch": [{"type": "track", "userId": "test", "event": "Test"}]}'
 ```
 
-Note: Pipeline binding won't work locally unless using `--remote` flag.
+Note: The Basin Pipelines binding won't work locally unless using the `--remote` flag.
 
 ## SDK Compatibility
 
@@ -145,6 +146,6 @@ Configure SDK to point to this worker's URL as the data plane.
 ## Notes
 
 - Worker URL pattern: `https://icelight-event-ingest.<subdomain>.workers.dev`
-- Events are validated before sending to pipeline
+- Events are validated and flattened (`FlattenedEvent`) before `PIPELINE.send()`
 - Invalid events return 400 with error details
-- Pipeline must exist before deploying (run `pnpm launch` first)
+- The stream must exist before deploying (run `pnpm launch` first); events that don't match the stream schema are accepted at ingest but dropped by the pipeline

@@ -4,113 +4,90 @@ This guide walks you through setting up icelight from scratch.
 
 ## Prerequisites
 
-1. **Cloudflare Account** with R2 enabled
+1. **Cloudflare Account** on the Workers Paid plan (required for Basin Pipelines)
 2. **Node.js 18+** and **pnpm 8+**
-3. **Wrangler CLI** authenticated with your Cloudflare account
+3. **Wrangler CLI** authenticated with your Cloudflare account (the repo pins wrangler `^4.147.0`; the `wrangler basin` commands need 4.145.0 or later)
 
 ```bash
-# Install wrangler globally
-npm install -g wrangler
-
 # Login to Cloudflare
-wrangler login
+npx wrangler login
 ```
 
 ## Step 1: Clone and Install
 
 ```bash
-git clone https://github.com/your-org/icelight.git
+git clone https://github.com/cliftonc/icelight.git
 cd icelight
 pnpm install
 pnpm build
 ```
 
-## Step 2: Configure Environment
+## Step 2: Create an API Token
 
-Copy the environment template:
+`pnpm launch` asks for a Cloudflare API token and saves it to `.env` as `ICELIGHT_API_TOKEN`. Create one at [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) with:
 
-```bash
-cp templates/.env.example .env
-```
+- **Account** → Workers R2 Storage → Edit
+- **Account** → Basin Catalog (Workers R2 Data Catalog) → Edit
+- **Account** → Basin SQL (Workers R2 SQL) → Read
+- **Account** → Workers Scripts → Read
 
-Edit `.env` with your settings:
+See `templates/.env.example` for the other values `.env` can hold.
 
-```bash
-# Cloudflare credentials (for query worker)
-CF_ACCOUNT_ID=your-account-id
-CF_API_TOKEN=your-api-token
+## Step 3: Launch
 
-# Pipeline configuration
-BUCKET_NAME=my-analytics-data
-NAMESPACE=analytics
-TABLE_NAME=events
-```
-
-## Step 3: Create Infrastructure
-
-Run the setup script to create all Cloudflare resources:
+Run the setup script to create all Cloudflare resources and deploy the workers:
 
 ```bash
 pnpm launch
 ```
 
-This creates:
-- R2 bucket with Data Catalog enabled
-- Pipeline stream with event schema
-- Pipeline sink to R2 Data Catalog (Iceberg)
-- Pipeline connecting stream to sink
+This:
+- Creates an R2 bucket with Basin Catalog enabled (`wrangler basin catalog enable`)
+- Creates a Basin Pipelines stream with the event schema (`templates/schema.events.json`)
+- Creates a sink that writes the Iceberg table `analytics.events` (60s roll interval)
+- Creates a pipeline: `INSERT INTO <sink> SELECT * FROM <stream>`
+- Creates a KV namespace (query cache) and D1 database (dashboards)
+- Writes `wrangler.local.jsonc` for each worker and deploys them
+- Offers to seed 30 days of demo events
 
-## Step 4: Configure Workers
-
-### Ingestion Worker
-
-Edit `workers/event-ingest/wrangler.jsonc` to uncomment the pipeline binding:
+The generated ingest config binds the stream:
 
 ```jsonc
 {
   "pipelines": [
     {
-      "pipeline": "icelight-events-pipeline",
-      "binding": "PIPELINE"
+      "binding": "PIPELINE",
+      "stream": "<STREAM_ID>"
     }
   ]
 }
 ```
 
-If you want authentication:
+The query config sets `WAREHOUSE_NAME` to the Basin Catalog warehouse (`<account-id>_<bucket>`) and the `CF_ACCOUNT_ID` / `CF_API_TOKEN` secrets.
+
+You can re-run `pnpm launch` at any time; it detects existing resources and only creates what's missing.
+
+## Step 4: Optional Authentication
+
+If you want ingestion authentication:
 
 ```bash
-wrangler secret put AUTH_TOKEN --config workers/event-ingest/wrangler.jsonc
+wrangler secret put AUTH_TOKEN --config workers/event-ingest/wrangler.local.jsonc
 ```
 
-And set `AUTH_ENABLED=true` in the wrangler config.
-
-### Query Worker
-
-Set required secrets:
+And set `AUTH_ENABLED=true` in the wrangler config, then redeploy:
 
 ```bash
-wrangler secret put CF_ACCOUNT_ID --config workers/query-api/wrangler.jsonc
-wrangler secret put CF_API_TOKEN --config workers/query-api/wrangler.jsonc
+pnpm deploy:ingest
 ```
 
-Set the warehouse name in `workers/query-api/wrangler.jsonc`:
-
-```jsonc
-{
-  "vars": {
-    "WAREHOUSE_NAME": "your-warehouse-name"
-  }
-}
-```
-
-## Step 5: Deploy Workers
+## Step 5: Redeploying
 
 ```bash
 # Deploy ingestion worker
 pnpm deploy:ingest
 
-# Deploy query worker
+# Deploy query worker (builds the UI first)
 pnpm deploy:query
 ```
 
@@ -132,12 +109,18 @@ curl -X POST https://icelight-event-ingest.your-subdomain.workers.dev/v1/track \
 
 ### Query the data
 
-Wait a minute for the pipeline to process, then:
+Wait 1-2 minutes for the sink to roll the data into Iceberg, then:
 
 ```bash
 curl -X POST https://icelight-query-api.your-subdomain.workers.dev/query \
   -H "Content-Type: application/json" \
   -d '{"sql": "SELECT * FROM analytics.events LIMIT 10"}'
+```
+
+### Load demo data
+
+```bash
+INGEST_API_URL=https://icelight-event-ingest.your-subdomain.workers.dev pnpm generate-events 30
 ```
 
 ## Next Steps

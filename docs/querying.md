@@ -1,10 +1,10 @@
 # Querying Data
 
-icelight stores events in Apache Iceberg tables that can be queried via multiple methods.
+icelight stores events in Apache Iceberg tables managed by [Basin Catalog](https://developers.cloudflare.com/basin-catalog/). The query worker runs everything on [Basin SQL](https://developers.cloudflare.com/basin-sql/), Cloudflare's serverless query engine, and external engines can read the same tables.
 
 ## Query API Worker
 
-The simplest way to query data is via the included query worker.
+The simplest way to query data is via the included query worker. `POST /query` proxies to the Basin SQL API (`POST https://api.sql.cloudflarestorage.com/api/v1/accounts/<account-id>/basin-sql/query/<bucket>`, body `{ warehouse, query }`).
 
 ### Execute SQL Query
 
@@ -45,10 +45,13 @@ curl -X POST https://icelight-query-api.your-subdomain.workers.dev/query \
       {"name": "type", "type": "string"}
     ],
     "rowCount": 1,
-    "executionTime": 150
+    "executionTime": 150,
+    "metrics": {"bytesScanned": 1048576, "filesScanned": 3}
   }
 }
 ```
+
+Basin SQL bills by compressed bytes scanned, so `meta.metrics.bytesScanned` shows what each query cost. Non-aggregated queries must include a `LIMIT` (max 10,000).
 
 ### List Tables
 
@@ -64,7 +67,9 @@ curl https://icelight-query-api.your-subdomain.workers.dev/tables/analytics/even
 
 ## Drizzle Cube Semantic API
 
-The query worker includes a semantic layer powered by [Drizzle Cube](https://github.com/nickmitchko/drizzle-cube) that provides a structured query API with automatic JSON field extraction.
+The query worker includes a semantic layer powered by [Drizzle Cube](https://try.drizzle-cube.dev) that provides a structured query API with automatic JSON field extraction.
+
+Drizzle Cube compiles queries with its Postgres adapter and runs them on Basin SQL through a small drizzle `pg-proxy` driver (`workers/query-api/src/query/basin-drizzle.ts`). The driver inlines parameters as escaped literals (Basin SQL has no bound parameters) and emulates `OFFSET`, which Basin SQL does not support. JSON dimensions compile to Basin SQL's `json_get_str` / `json_get_float` / `json_get_bool` functions.
 
 ### Endpoints
 
@@ -100,7 +105,7 @@ The semantic API automatically extracts fields from the `properties`, `traits`, 
 Edit `workers/query-api/src/cube-config.ts` to customize JSON field extraction:
 
 ```typescript
-import { type CubeJsonConfig, mergeCubeConfig } from '@icelight/query';
+import { type CubeJsonConfig, mergeCubeConfig } from './query/index.js';
 
 // Merge custom fields with defaults
 export const cubeConfig: CubeJsonConfig = mergeCubeConfig({
@@ -128,7 +133,7 @@ export const cubeConfig: CubeJsonConfig = mergeCubeConfig({
 |----------|------|----------|-------------|
 | `name` | string | Yes | Dimension name (camelCase, used in queries) |
 | `title` | string | No | Human-readable title for UI |
-| `path` | string | Yes | JSONPath to extract (e.g., `$.field`, `$.nested.field`) |
+| `path` | string | Yes | JSONPath to extract (e.g., `$.field`, `$.nested.field`, `$.items[0].sku`) |
 | `type` | string | Yes | Data type: `string`, `number`, or `boolean` |
 | `shown` | boolean | No | Whether to show in UI (default: true) |
 
@@ -137,7 +142,7 @@ export const cubeConfig: CubeJsonConfig = mergeCubeConfig({
 To use only the built-in defaults without customization:
 
 ```typescript
-import { DEFAULT_CUBE_CONFIG } from '@icelight/query';
+import { DEFAULT_CUBE_CONFIG } from './query/index.js';
 export const cubeConfig = DEFAULT_CUBE_CONFIG;
 ```
 
@@ -146,7 +151,7 @@ export const cubeConfig = DEFAULT_CUBE_CONFIG;
 To completely replace the default configuration:
 
 ```typescript
-import { createCubeConfig } from '@icelight/query';
+import { createCubeConfig } from './query/index.js';
 
 export const cubeConfig = createCubeConfig({
   properties: [
@@ -192,14 +197,23 @@ The following JSON fields are extracted by default:
 
 ## Wrangler CLI
 
-Query directly via the Wrangler CLI:
+Query directly via the Wrangler CLI (needs `WRANGLER_BASIN_SQL_AUTH_TOKEN` or `CLOUDFLARE_API_TOKEN` set to a token with Basin SQL Read):
 
 ```bash
-npx wrangler r2 sql query "your-warehouse-name" \
+# Find your warehouse name (<account-id>_<bucket>)
+npx wrangler basin catalog get icelight-data
+
+npx wrangler basin sql query "<account-id>_icelight-data" \
   "SELECT type, COUNT(*) as count FROM analytics.events GROUP BY type"
 ```
 
 ## External Query Engines
+
+Basin Catalog exposes a standard Iceberg REST catalog, so any Iceberg engine can read the tables directly. You need:
+
+- **Catalog URI**: `https://catalog.cloudflarestorage.com/<account-id>/<bucket>` (shown by `wrangler basin catalog get <bucket>`)
+- **Warehouse**: `<account-id>_<bucket>`
+- **Token**: a Cloudflare API token with Basin Catalog and R2 Storage permissions
 
 ### PyIceberg (Python)
 
@@ -210,7 +224,8 @@ catalog = load_catalog(
     "cloudflare",
     **{
         "type": "rest",
-        "uri": "https://your-warehouse.r2.cloudflarestorage.com",
+        "uri": "https://catalog.cloudflarestorage.com/<account-id>/icelight-data",
+        "warehouse": "<account-id>_icelight-data",
         "token": "your-cloudflare-api-token"
     }
 )
@@ -231,19 +246,25 @@ print(df.head())
 ```python
 import duckdb
 
-# Connect to Iceberg catalog
+# Attach the Basin Catalog via its Iceberg REST endpoint
 conn = duckdb.connect()
 conn.execute("""
     INSTALL iceberg;
     LOAD iceberg;
+
+    CREATE SECRET basin_catalog (
+        TYPE ICEBERG,
+        TOKEN 'your-cloudflare-api-token'
+    );
+
+    ATTACH '<account-id>_icelight-data' AS basin (
+        TYPE ICEBERG,
+        ENDPOINT 'https://catalog.cloudflarestorage.com/<account-id>/icelight-data'
+    );
 """)
 
-# Query Iceberg table
 df = conn.execute("""
-    SELECT * FROM iceberg_scan(
-        's3://your-bucket/analytics/events',
-        allow_moved_paths = true
-    )
+    SELECT * FROM basin.analytics.events
     WHERE type = 'track'
     LIMIT 100
 """).fetchdf()
@@ -258,7 +279,8 @@ spark = SparkSession.builder \
     .appName("icelight-query") \
     .config("spark.sql.catalog.cloudflare", "org.apache.iceberg.spark.SparkCatalog") \
     .config("spark.sql.catalog.cloudflare.type", "rest") \
-    .config("spark.sql.catalog.cloudflare.uri", "https://your-warehouse.r2.cloudflarestorage.com") \
+    .config("spark.sql.catalog.cloudflare.uri", "https://catalog.cloudflarestorage.com/<account-id>/icelight-data") \
+    .config("spark.sql.catalog.cloudflare.warehouse", "<account-id>_icelight-data") \
     .config("spark.sql.catalog.cloudflare.token", "your-token") \
     .getOrCreate()
 
@@ -294,6 +316,8 @@ The events table has the following columns:
 
 ## Example Queries
 
+These run on Basin SQL (via `/query`, the UI's SQL page, or `wrangler basin sql query`).
+
 ### Event Counts by Type
 
 ```sql
@@ -307,10 +331,10 @@ ORDER BY count DESC
 
 ```sql
 SELECT
-  DATE(timestamp) as date,
+  date_trunc('day', timestamp) as date,
   COUNT(DISTINCT COALESCE(user_id, anonymous_id)) as dau
 FROM analytics.events
-GROUP BY DATE(timestamp)
+GROUP BY date_trunc('day', timestamp)
 ORDER BY date DESC
 LIMIT 30
 ```
@@ -340,27 +364,31 @@ LIMIT 100
 
 ```sql
 SELECT
-  DATE(timestamp) as date,
-  SUM(CAST(JSON_EXTRACT(properties, '$.revenue') AS DECIMAL)) as revenue
+  date_trunc('day', timestamp) as date,
+  SUM(json_get_float(properties, 'revenue')) as revenue
 FROM analytics.events
 WHERE type = 'track' AND event = 'Purchase Completed'
-GROUP BY DATE(timestamp)
+GROUP BY date_trunc('day', timestamp)
 ORDER BY date DESC
+LIMIT 30
 ```
 
 ## Limitations
 
-### R2 SQL (Current Beta)
+### Basin SQL
 
-- **Read-only**: Only SELECT queries supported
-- **No joins**: Cannot join tables (coming H1 2026)
-- **No aggregations**: GROUP BY, COUNT, SUM not yet supported (coming H1 2026)
-- **Limited functions**: Basic SQL functions only
+Basin SQL (formerly R2 SQL) has been generally available since October 2026. It supports aggregations, `GROUP BY`/`HAVING`, all join types, CTEs, subqueries, window functions, set operations and JSON functions. Remaining gaps:
 
-For complex queries, export data to PyIceberg, DuckDB, or Spark.
+- **Read-only**: only `SELECT` (plus `SHOW`/`DESCRIBE`/`EXPLAIN`); no writes or DDL
+- **No `OFFSET`**, `UNNEST`, `PIVOT`/`UNPIVOT` or `LATERAL` (the semantic layer emulates `OFFSET`)
+- **Default `LIMIT 500`** when a query has no `LIMIT`
+- Very heavy queries (large `COUNT(DISTINCT)`, multi-way joins, percentiles) may time out or be rejected
+- **Pricing**: $2.50/TB of compressed data scanned after 10 GB/month free, 10 MB minimum per query ([pricing](https://developers.cloudflare.com/basin/platform/pricing/))
+
+See the [Basin SQL limitations](https://developers.cloudflare.com/basin-sql/reference/limitations-best-practices/) page for details.
 
 ### Data Latency
 
-- Events are batched and written to Parquet files based on `ROLL_INTERVAL` (default: 60 seconds)
+- The sink rolls new Parquet files every 60 seconds (the minimum for Basin Catalog sinks)
 - There may be a 1-2 minute delay between ingestion and query availability
-- R2 Data Catalog compaction runs automatically (2GB/hour during beta)
+- Enable Basin Catalog compaction (`wrangler basin catalog compaction enable`) to merge small files on long-running deployments

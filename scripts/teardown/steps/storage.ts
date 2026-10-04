@@ -67,7 +67,7 @@ export async function listBucketObjects(
   let cursor: string | undefined;
 
   do {
-    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${bucketName}/objects${cursor ? `?cursor=${cursor}` : ''}`;
+    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${bucketName}/objects?per_page=1000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
 
     try {
       const response = await fetch(url, {
@@ -81,20 +81,29 @@ export async function listBucketObjects(
         break;
       }
 
+      // The API returns `result` as an array of objects with paging in
+      // `result_info`; older responses nested them as `result.objects`
+      type R2Object = { key: string };
       const data = (await response.json()) as {
         success: boolean;
-        result: { objects: Array<{ key: string }>; cursor?: string; truncated?: boolean };
+        result: R2Object[] | { objects?: R2Object[]; cursor?: string; truncated?: boolean };
+        result_info?: { cursor?: string; is_truncated?: boolean };
       };
 
       if (!data.success || !data.result) {
         break;
       }
 
-      for (const obj of data.result.objects || []) {
+      const page = Array.isArray(data.result) ? data.result : data.result.objects ?? [];
+      for (const obj of page) {
         objects.push(obj.key);
       }
 
-      cursor = data.result.truncated ? data.result.cursor : undefined;
+      if (Array.isArray(data.result)) {
+        cursor = data.result_info?.is_truncated ? data.result_info.cursor : undefined;
+      } else {
+        cursor = data.result.truncated ? data.result.cursor : undefined;
+      }
     } catch {
       break;
     }

@@ -19,9 +19,9 @@ export async function checkExistingResources(config: Config): Promise<ExistingRe
     d1Database: { exists: false, id: null },
   };
 
-  // Check R2 bucket
-  const bucketsOutput = await runQuietAsync('wrangler r2 bucket list');
-  if (bucketsOutput && bucketsOutput.includes(config.bucketName)) {
+  // Check R2 bucket by name (`r2 bucket list` only returns the first 20 buckets)
+  const bucketOutput = await runQuietAsync(`wrangler r2 bucket info ${config.bucketName}`);
+  if (bucketOutput && bucketOutput.includes(config.bucketName)) {
     resources.bucket = true;
 
     // Check if catalog is enabled

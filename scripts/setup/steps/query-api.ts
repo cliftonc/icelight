@@ -17,6 +17,7 @@ import {
 } from '../core/wrangler.js';
 import { promptRedeploy } from '../core/prompts.js';
 import { getEventIngestWorkerName } from './event-ingest.js';
+import { loadEnvFile } from '../core/env.js';
 
 /**
  * Get worker name based on project name
@@ -62,6 +63,14 @@ export function createQueryApiLocalConfig(
     const vars = (config.vars as Record<string, unknown>) || {};
     vars.WAREHOUSE_NAME = warehouseName;
     config.vars = vars;
+
+    // Optional custom domain (e.g. try.icelight.dev) - the zone must be in your account
+    const customDomain = loadEnvFile().ICELIGHT_QUERY_DOMAIN;
+    if (customDomain) {
+      config.routes = [{ pattern: customDomain, custom_domain: true }];
+      // Adding routes disables workers.dev unless it's set explicitly
+      config.workers_dev = true;
+    }
 
     // Point the ingest service binding at this project's ingest worker
     config.services = [

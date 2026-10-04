@@ -28,6 +28,7 @@
 |----------|---------|-------------|
 | `ICELIGHT_PROJECT_NAME` | `icelight` | Project name; all resource names derive from it |
 | `ICELIGHT_API_TOKEN` | - | API token used for the sink, Basin SQL and worker secrets |
+| `ICELIGHT_QUERY_DOMAIN` | - | Optional custom domain for the query API / web UI (e.g. `analytics.example.com`) |
 
 Resource names derived from the project name (e.g. `icelight`):
 
@@ -168,18 +169,23 @@ Notes:
 
 ## Custom Domain
 
-To use a custom domain for your workers:
+To serve the query API and web UI on your own domain:
 
-1. Add the domain to your Cloudflare account
-2. Update `wrangler.jsonc`:
+1. Add the domain's zone to your Cloudflare account
+2. Set it in `.env`:
+
+   ```bash
+   ICELIGHT_QUERY_DOMAIN=analytics.example.com
+   ```
+
+3. Run `pnpm launch` (or `pnpm deploy:query` after relaunching). Launch adds the domain to the query worker as a [Workers custom domain](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/), and Cloudflare creates the DNS record and certificate.
+
+For the ingest worker, add a `routes` entry by hand to `workers/event-ingest/wrangler.local.jsonc`:
 
 ```jsonc
 {
-  "routes": [
-    {
-      "pattern": "events.yourdomain.com/*",
-      "custom_domain": true
-    }
-  ]
+  "routes": [{ "pattern": "events.example.com", "custom_domain": true }]
 }
 ```
+
+Launch regenerates `wrangler.local.jsonc`, so re-add it after relaunching.

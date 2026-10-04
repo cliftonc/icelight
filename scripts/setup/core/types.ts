@@ -89,6 +89,8 @@ export interface SetupContext {
 export interface SavedEnv {
   ICELIGHT_PROJECT_NAME?: string;
   ICELIGHT_API_TOKEN?: string;
+  /** Optional custom domain for the query API worker, e.g. try.icelight.dev */
+  ICELIGHT_QUERY_DOMAIN?: string;
   /** Legacy names from the project's cdpflare days, still read as fallbacks */
   CDPFLARE_PROJECT_NAME?: string;
   CDPFLARE_API_TOKEN?: string;

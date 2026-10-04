@@ -2,14 +2,14 @@
  * Cron handler for scheduled event generation
  *
  * Triggered at 2 AM UTC daily to:
- * 1. Generate ~5,000 realistic analytics events for the prior 24 hours
+ * 1. Generate ~3,000 realistic analytics events for the prior 24 hours
  * 2. Send them to the ingest API via service binding
  * 3. Reset the default dashboard to its original configuration
  */
 import { eq } from 'drizzle-orm';
 import { generateDailyEvents } from '../event-generator/index.js';
 import { createDb, schema } from '../db/index.js';
-import { defaultDashboardConfig, DEFAULT_DASHBOARD_ID } from '../dashboards/default-dashboard.js';
+import { getDefaultDashboardConfig, DEFAULT_DASHBOARD_ID } from '../dashboards/default-dashboard.js';
 import type { AnalyticsEvent } from '@icelight/core';
 
 /**
@@ -22,6 +22,8 @@ export interface CronEnv {
   INGEST_API_URL?: string;
   /** D1 database for dashboard storage */
   DB?: D1Database;
+  /** Ingest worker AUTH_TOKEN (sent when ingest auth is enabled) */
+  INGEST_AUTH_TOKEN?: string;
 }
 
 /**
@@ -55,6 +57,10 @@ async function sendEvents(
 
   const errors: string[] = [];
   let sent = 0;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (env.INGEST_AUTH_TOKEN) {
+    headers.Authorization = `Bearer ${env.INGEST_AUTH_TOKEN}`;
+  }
 
   // Send in batches of 100 events
   const batches = chunk(events, 100);
@@ -69,14 +75,14 @@ async function sendEvents(
         // Use service binding (preferred)
         response = await fetcher.fetch('https://ingest/v1/batch', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body,
         });
       } else {
         // Fallback to URL
         response = await fetch(`${url}/v1/batch`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body,
         });
       }
@@ -114,7 +120,7 @@ async function resetDefaultDashboard(env: CronEnv): Promise<{ success: boolean; 
     await db
       .update(schema.dashboards)
       .set({
-        config: JSON.stringify(defaultDashboardConfig),
+        config: JSON.stringify(getDefaultDashboardConfig()),
         updatedAt: now,
       })
       .where(eq(schema.dashboards.id, DEFAULT_DASHBOARD_ID));
@@ -144,7 +150,7 @@ export async function handleScheduled(
 
   // 1. Generate events for the prior 24 hours
   console.log('Generating daily events...');
-  const result = generateDailyEvents(75, 66); // ~5,000 events
+  const result = generateDailyEvents(100, 66); // ~3,000 events, matching the seeded history
   console.log(`Generated ${result.events.length} events for ${result.userCount} users across ${result.sessionCount} sessions`);
   console.log(`Event breakdown: track=${result.eventCounts.track}, identify=${result.eventCounts.identify}, page=${result.eventCounts.page}, screen=${result.eventCounts.screen}, group=${result.eventCounts.group}`);
 

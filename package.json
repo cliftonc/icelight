@@ -15,6 +15,7 @@
     "deploy:all": "pnpm -r run deploy",
     "launch": "tsx scripts/setup/index.ts",
     "teardown": "tsx scripts/teardown/index.ts",
+    "reseed": "tsx scripts/reseed/index.ts",
     "generate-events": "tsx scripts/generate-events.ts",
     "typecheck": "pnpm -r typecheck && tsc --project scripts/tsconfig.json",
     "typecheck:scripts": "tsc --project scripts/tsconfig.json",

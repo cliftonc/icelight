@@ -17,7 +17,7 @@ import {
 } from '../core/wrangler.js';
 import { promptRedeploy } from '../core/prompts.js';
 import { getEventIngestWorkerName } from './event-ingest.js';
-import { loadEnvFile } from '../core/env.js';
+import { getOrCreateIngestToken, loadEnvFile } from '../core/env.js';
 
 /**
  * Get worker name based on project name
@@ -64,8 +64,14 @@ export function createQueryApiLocalConfig(
     vars.WAREHOUSE_NAME = warehouseName;
     config.vars = vars;
 
+    // Public demo: anonymous Event Simulator ingest through the /v1/* proxy
+    const savedEnv = loadEnvFile();
+    if (savedEnv.ICELIGHT_PUBLIC_DEMO === 'true') {
+      vars.PUBLIC_DEMO = 'true';
+    }
+
     // Optional custom domain (e.g. try.icelight.dev) - the zone must be in your account
-    const customDomain = loadEnvFile().ICELIGHT_QUERY_DOMAIN;
+    const customDomain = savedEnv.ICELIGHT_QUERY_DOMAIN;
     if (customDomain) {
       config.routes = [{ pattern: customDomain, custom_domain: true }];
       // Adding routes disables workers.dev unless it's set explicitly
@@ -172,7 +178,9 @@ export async function setQueryApiSecrets(accountId: string, apiToken: string): P
   const { localPath } = getPaths();
   const accountResult = await setSecretAsync('CF_ACCOUNT_ID', accountId, localPath);
   const tokenResult = await setSecretAsync('CF_API_TOKEN', apiToken, localPath);
-  return accountResult && tokenResult;
+  // Lets the cron (and the public demo /v1/* proxy) authenticate to the ingest worker
+  const ingestResult = await setSecretAsync('INGEST_AUTH_TOKEN', getOrCreateIngestToken(), localPath);
+  return accountResult && tokenResult && ingestResult;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { useState, useCallback, type ChangeEvent } from 'react';
 
-const STORAGE_KEY = 'icelight_api_token';
+import { API_TOKEN_STORAGE_KEY as STORAGE_KEY } from '../api/auth.ts';
 
 export default function TokenInput() {
   const [token, setToken] = useState(() => localStorage.getItem(STORAGE_KEY) ?? '');
@@ -10,6 +10,8 @@ export default function TokenInput() {
     if (token.trim()) {
       localStorage.setItem(STORAGE_KEY, token.trim());
       setIsSaved(true);
+      // The dashboard/semantic client reads the token at startup
+      window.location.reload();
     } else {
       localStorage.removeItem(STORAGE_KEY);
       setIsSaved(false);
@@ -20,6 +22,7 @@ export default function TokenInput() {
     localStorage.removeItem(STORAGE_KEY);
     setToken('');
     setIsSaved(false);
+    window.location.reload();
   }, []);
 
   return (
@@ -47,7 +50,7 @@ export default function TokenInput() {
       >
         <div className="card-body">
           <h3 className="font-semibold text-sm">API Token</h3>
-          <p className="text-xs text-base-content/60">Optional authentication token for the query API</p>
+          <p className="text-xs text-base-content/60">This deployment requires its API_TOKEN for queries and dashboards</p>
           <div className="form-control mt-2">
             <input
               type="password"

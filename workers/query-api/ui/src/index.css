@@ -6,6 +6,17 @@
 
 @config "../tailwind.config.js";
 
+/* drizzle-cube 0.10.1's styles.css is missing these two utilities, so SVG
+   labels that use them (e.g. sankey node labels) fall back to black and are
+   unreadable in dark mode. Remove once drizzle-cube ships them:
+   https://github.com/cliftonc/drizzle-cube/issues/1366 */
+.dc\:fill-dc-text {
+  fill: var(--dc-text);
+}
+.dc\:fill-dc-text-secondary {
+  fill: var(--dc-text-secondary);
+}
+
 /* ============================================================================
    Drizzle Cube Theme Variables
    Matched to DaisyUI light and dark theme colors

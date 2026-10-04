@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { defineCube } from 'drizzle-cube/server';
 import type { Cube } from 'drizzle-cube/server';
 import { events } from '../schema/events.js';
@@ -137,17 +138,30 @@ export function createEventsCube(config: CubeJsonConfig = DEFAULT_CUBE_CONFIG): 
         type: 'countDistinct',
         sql: events.anonymousId as any,
       },
+      purchases: {
+        name: 'purchases',
+        title: 'Purchases',
+        description: 'Number of "Purchase Completed" track events',
+        synonyms: ['orders', 'sales', 'conversions'],
+        type: 'count',
+        sql: events.messageId as any,
+        filters: [() => eq(events.event, 'Purchase Completed') as any],
+      },
       // Revenue measures (only if revenue field is configured)
       ...(revenueField ? {
         totalRevenue: {
           name: 'totalRevenue',
           title: 'Total Revenue',
+          description: 'Sum of the revenue property, in USD',
+          synonyms: ['revenue', 'sales'],
           type: 'sum',
           sql: jsonExtract('properties', revenueField.path, 'number') as any,
         },
         avgRevenue: {
           name: 'avgRevenue',
-          title: 'Average Revenue',
+          title: 'Avg Order Value',
+          description: 'Average revenue per event that carries a revenue value (i.e. per purchase)',
+          synonyms: ['AOV', 'average order value', 'average revenue'],
           type: 'avg',
           sql: jsonExtract('properties', revenueField.path, 'number') as any,
         },

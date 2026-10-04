@@ -7,12 +7,19 @@ import QueryPage from './pages/QueryPage.tsx';
 import EventSimulatorPage from './pages/EventSimulatorPage.tsx';
 import AnalysisPage from './pages/AnalysisPage.tsx';
 import DashboardPage from './pages/DashboardPage.tsx';
+import { fetchServerConfig, getApiToken, type ServerConfig } from './api/auth.ts';
 
 const queryClient = new QueryClient();
 
 // Shared Cube provider configuration
 const cubeApiOptions = { apiUrl: '/cubejs-api/v1' };
-const cubeFeatures = { useAnalysisBuilder: true, dashboardModes: ['rows', 'grid'] };
+// enableAI defaults to true in drizzle-cube, but the query API doesn't serve
+// the /api/ai routes it needs, so the assistant would only show errors.
+// Dashboards use the rows layout only (sections and portlet groups).
+const cubeFeatures = { useAnalysisBuilder: true, dashboardModes: ['rows'], enableAI: false };
+// Read once: changing the token in the navbar reloads the page
+const apiToken = getApiToken();
+const cubeToken = apiToken ? `Bearer ${apiToken}` : undefined;
 
 function getPageFromHash(): Page {
   const hash = window.location.hash.slice(1); // Remove '#'
@@ -25,6 +32,11 @@ function getPageFromHash(): Page {
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>(getPageFromHash);
+  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
+
+  useEffect(() => {
+    fetchServerConfig().then(setServerConfig);
+  }, []);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -44,10 +56,15 @@ export default function App() {
       <CubeProvider
         apiOptions={cubeApiOptions}
         features={cubeFeatures}
+        token={cubeToken}
         enableBatching={false}
       >
         <div className="min-h-screen bg-base-200">
-          <Navbar currentPage={currentPage} onPageChange={handlePageChange} />
+          <Navbar
+            currentPage={currentPage}
+            onPageChange={handlePageChange}
+            showTokenInput={serverConfig?.authRequired ?? false}
+          />
           {currentPage === 'home' && <HomePage onNavigate={handlePageChange} />}
           {currentPage === 'query' && <QueryPage />}
           {currentPage === 'simulator' && <EventSimulatorPage />}

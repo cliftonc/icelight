@@ -12,7 +12,9 @@ import {
   extractWorkerUrl,
   checkWorkerDeployedAsync,
   constructWorkerUrl,
+  setSecretAsync,
 } from '../core/wrangler.js';
+import { getOrCreateIngestToken } from '../core/env.js';
 import { promptRedeploy } from '../core/prompts.js';
 
 /**
@@ -130,6 +132,9 @@ export async function setupEventIngest(
     const workerName = getEventIngestWorkerName(projectName);
     const result = await deployEventIngest();
     if (result.success) {
+      // AUTH_ENABLED is on by default: set the write key the seed, cron and SDKs use
+      const { localPath } = getPaths();
+      await setSecretAsync('AUTH_TOKEN', getOrCreateIngestToken(), localPath);
       // Use extracted URL or construct it from worker name and subdomain
       const url = result.url || constructWorkerUrl(workerName, subdomain);
       if (url) {

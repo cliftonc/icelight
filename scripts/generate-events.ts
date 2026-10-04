@@ -9,6 +9,7 @@
  *
  * Environment variables:
  *   INGEST_API_URL - URL to the ingest API (default: http://localhost:8787)
+ *   ICELIGHT_INGEST_TOKEN - ingest write key (default: from .env, written by pnpm launch)
  */
 
 import { seedEvents } from './shared/seed-events.js';

@@ -1,6 +1,6 @@
 import { Hono, Context } from 'hono';
 import { cors } from 'hono/cors';
-import { bearerAuth } from 'hono/bearer-auth';
+import { bodyLimit } from 'hono/body-limit';
 import { executeQuery, listTables, describeTable, type BasinSqlConfig, type BasinSqlMetrics } from './basin-sql.js';
 import { createBasinDrizzle } from './basin-drizzle.js';
 import { formatResult, type OutputFormat } from './formatter.js';
@@ -9,6 +9,7 @@ import { events } from './schema/events.js';
 import { createCubeApp } from 'drizzle-cube/adapters/hono';
 import { allCubes } from './cubes/events.js';
 import { SemanticLayerCompiler, type Cube, type CacheConfig, type CacheProvider } from 'drizzle-cube/server';
+import { apiAuth, rateLimit, withoutAnonymousCacheBypass } from './protection.js';
 
 /**
  * Factory function to create a cache provider from KV binding
@@ -28,6 +29,11 @@ export interface QueryEnv {
   CACHE?: KVNamespace; // KV binding for drizzle-cube query result caching
   // D1 database for dashboard storage
   DB?: D1Database; // D1 binding for dashboard configuration storage
+  // Cost and abuse protection (see protection.ts)
+  RATE_LIMITER?: RateLimit; // Per-IP limit for query, semantic, MCP and dashboard routes
+  INGEST_AUTH_TOKEN?: string; // Ingest worker AUTH_TOKEN, used by the cron and the public demo proxy
+  PUBLIC_DEMO?: string; // "true": anonymous /v1/* ingest through this worker (tightly limited)
+  DEMO_INGEST_RATE_LIMITER?: RateLimit; // Per-IP limit for the public demo /v1/* proxy
 }
 
 export interface QueryRequest {
@@ -104,13 +110,25 @@ export function createQueryApp(options: QueryAppOptions = {}) {
     return corsMiddleware(c, next);
   });
 
-  // Optional auth middleware - only apply if API_TOKEN is set
-  app.use('*', async (c, next) => {
-    if (c.env.API_TOKEN) {
-      const authMiddleware = bearerAuth({ token: c.env.API_TOKEN });
-      return authMiddleware(c, next);
-    }
-    await next();
+  // Optional auth middleware - only applies if API_TOKEN is set
+  app.use('*', apiAuth());
+
+  // Per-IP rate limits on everything that can reach Basin SQL or the ingest worker
+  const limitQueries = rateLimit<QueryEnv>((env) => env.RATE_LIMITER);
+  for (const path of ['/query', '/tables/*', '/cubejs-api/*', '/mcp', '/mcp/*']) {
+    app.use(path, limitQueries);
+  }
+  app.use(
+    '/v1/*',
+    rateLimit<QueryEnv>((env) => (env.PUBLIC_DEMO === 'true' ? env.DEMO_INGEST_RATE_LIMITER : env.RATE_LIMITER))
+  );
+  // Public demo ingest only needs to carry a few simulator events per request
+  app.use('/v1/*', async (c, next) => {
+    if (c.env.PUBLIC_DEMO !== 'true') return next();
+    return bodyLimit({
+      maxSize: 64 * 1024,
+      onError: (c) => c.json({ success: false, error: 'Request too large for the public demo' }, 413),
+    })(c, next);
   });
 
   // Health check
@@ -287,6 +305,11 @@ async function handleIngestProxy(c: QueryContext) {
   const headers = new Headers(c.req.raw.headers);
   // Remove host header to avoid issues
   headers.delete('host');
+  // Public demo: anonymous visitors can send events through this proxy, which
+  // authenticates to the ingest worker on their behalf (after the limits above)
+  if (c.env.PUBLIC_DEMO === 'true' && c.env.INGEST_AUTH_TOKEN) {
+    headers.set('Authorization', `Bearer ${c.env.INGEST_AUTH_TOKEN}`);
+  }
 
   // Use service binding fetch or global fetch
   const fetchFn = useServiceBinding ? c.env.INGEST_API!.fetch.bind(c.env.INGEST_API) : fetch;
@@ -295,7 +318,8 @@ async function handleIngestProxy(c: QueryContext) {
     const response = await fetchFn(targetUrl, {
       method: c.req.method,
       headers,
-      body: c.req.method !== 'GET' && c.req.method !== 'HEAD' ? c.req.raw.body : undefined,
+      // Read through Hono (not the raw stream) so it works after bodyLimit
+      body: c.req.method !== 'GET' && c.req.method !== 'HEAD' ? await c.req.arrayBuffer() : undefined,
     });
 
     // Return the response from the ingest API
@@ -343,7 +367,7 @@ async function handleCubeRequest(c: QueryContext, cubes: Cube[], cacheConfig?: C
   });
 
   // Forward request to cube app
-  return cubeApp.fetch(c.req.raw, c.env, c.executionCtx);
+  return cubeApp.fetch(withoutAnonymousCacheBypass(c.req.raw, c.env), c.env, c.executionCtx);
 }
 
 /**

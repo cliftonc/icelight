@@ -4,6 +4,8 @@ First party product analytics on Cloudflare. Stream Analytics.js events into Apa
 
 **Live Demo**: https://try.icelight.dev
 
+> **This is an example project, not a hosted service or a library you install.** The intent is that you clone it, deploy your own copy with `pnpm launch`, and then make it yours: change the event schema, cubes, dashboards and UI to build your own in-house product analytics on your Cloudflare account. The demo above runs on generated data and is reset daily.
+
 ## TL;DR
 
 You need a Cloudflare account on the Workers Paid plan, Node 18+, pnpm, and a [Cloudflare API token](#3-create-an-api-token).
@@ -68,15 +70,17 @@ https://icelight-query-api.YOUR-SUBDOMAIN.workers.dev
 
 Demo data appears after the first sink flush (about 1–2 minutes).
 
+Launch also generates an ingest write key, `ICELIGHT_INGEST_TOKEN` in `.env`. The ingest worker requires it on every request (see [Cost & abuse protection](#cost--abuse-protection)).
+
 ### 5. Send your own events
 
-Point any Analytics.js (RudderStack / Segment) client at your ingest worker:
+Point any Analytics.js (RudderStack / Segment) client at your ingest worker, using `ICELIGHT_INGEST_TOKEN` from `.env` as the write key:
 
 ```javascript
 import { Analytics } from '@rudderstack/analytics-js';
 
 const analytics = new Analytics({
-  writeKey: 'any-value',
+  writeKey: 'YOUR_ICELIGHT_INGEST_TOKEN',
   dataPlaneUrl: 'https://icelight-event-ingest.YOUR-SUBDOMAIN.workers.dev'
 });
 
@@ -88,8 +92,17 @@ Or send events over HTTP:
 ```bash
 curl -X POST https://icelight-event-ingest.YOUR-SUBDOMAIN.workers.dev/v1/track \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $ICELIGHT_INGEST_TOKEN" \
   -d '{"userId":"user-123","event":"Button Clicked","properties":{"button":"signup"}}'
 ```
+
+### Start over with fresh demo data
+
+```bash
+pnpm reseed            # 30 days; or e.g. pnpm reseed 60
+```
+
+Deletes every event in `analytics.events` and sends fresh demo events. Keeps the bucket, catalog, stream and workers (no redeploy); the sink and pipeline are recreated, because a Basin Catalog sink can't write to an existing table. Asks before deleting (`--confirm` skips the prompt; `--reset-dashboard` also resets the default dashboard).
 
 ### Remove everything
 
@@ -154,6 +167,20 @@ curl https://icelight-query-api.YOUR-SUBDOMAIN.workers.dev/tables/analytics/even
 
 External engines (PyIceberg, DuckDB, Spark) can read the same tables through Basin Catalog's Iceberg REST endpoint (`https://catalog.cloudflarestorage.com/<account-id>/<bucket>`). See [Querying Data](docs/querying.md#external-query-engines).
 
+### Ask Claude (MCP)
+
+The query API serves the semantic layer as an MCP server at `/mcp` (tools: `discover`, `validate`, `load`, `chart`), so Claude can answer questions about your events in plain English.
+
+- **Claude (web, desktop, mobile)**: Settings → Connectors → **Add custom connector**, with the URL `https://<your-query-api>/mcp` (the demo is `https://try.icelight.dev/mcp`).
+- **Claude Code**:
+
+  ```bash
+  claude mcp add --transport http icelight https://<your-query-api>/mcp
+  # if you set API_TOKEN: add --header "Authorization: Bearer <token>"
+  ```
+
+Then ask things like "How many events did we have this week, and which day had the most revenue?"
+
 ## API Endpoints
 
 ### Ingest worker
@@ -180,6 +207,9 @@ Standard Analytics.js endpoints:
 | `/tables/:namespace/:table` | GET | Describe table schema |
 | `/cubejs-api/v1/meta` | GET | Cube.js-compatible semantic layer metadata |
 | `/cubejs-api/v1/load` | POST | Execute Cube.js-compatible semantic query |
+| `/mcp` | POST | MCP server for Claude and other MCP clients |
+| `/api/dashboards` | * | Dashboard storage (D1) |
+| `/api/config` | GET | Public: `{ authRequired, publicDemo }`, used by the UI |
 | `/health` | GET | Health check |
 
 ## Development
@@ -193,7 +223,7 @@ pnpm typecheck      # Type check
 
 Local workers still use your remote Cloudflare resources (Basin Pipelines and Basin SQL have no local emulation), so run `pnpm launch` first.
 
-Load demo data into any ingest worker:
+Load demo data into any ingest worker (this adds to existing data; `pnpm reseed` replaces it):
 
 ```bash
 INGEST_API_URL=https://icelight-event-ingest.YOUR-SUBDOMAIN.workers.dev pnpm generate-events 30
@@ -216,9 +246,10 @@ Launch shows wrangler's error message and log file path. Fix the cause and re-ru
 
 ### Events not arriving
 
-1. Check `workers/event-ingest/wrangler.local.jsonc` exists (if not, run `pnpm launch`) and has `"pipelines": [{ "binding": "PIPELINE", "stream": "<STREAM_ID>" }]`
-2. Run `npx wrangler basin pipelines streams list` to confirm the stream ID
-3. Redeploy after config changes: `pnpm deploy:ingest`
+1. Requests rejected with 401 need the write key (`ICELIGHT_INGEST_TOKEN`); a 500 "Authentication is enabled but no token is configured" means `AUTH_TOKEN` isn't set yet (see [Upgrading](#upgrading-an-existing-deployment)); 429 means the per-IP rate limit was hit
+2. Check `workers/event-ingest/wrangler.local.jsonc` exists (if not, run `pnpm launch`) and has `"pipelines": [{ "binding": "PIPELINE", "stream": "<STREAM_ID>" }]`
+3. Run `npx wrangler basin pipelines streams list` to confirm the stream ID
+4. Redeploy after config changes: `pnpm deploy:ingest`
 
 Events that don't match the stream schema are accepted but dropped during processing.
 
@@ -230,7 +261,8 @@ Teardown also drops Basin Catalog tables, aborts unfinished uploads left by the 
 
 Basin is billed per use ([pricing](https://developers.cloudflare.com/basin/platform/pricing/)):
 
-- **Ingest**: free
+- **Ingest (stream)**: free
+- **Pipeline SQL transform**: 50 GB/month included, then $0.04/GB
 - **Sink delivery (Parquet/Iceberg)**: 50 GB/month included, then $0.06/GB
 - **Basin SQL**: 10 GB/month scanned included, then $2.50/TB of compressed data scanned (10 MB minimum per query)
 - R2 storage is billed separately
@@ -240,6 +272,33 @@ Limits worth knowing:
 - Streams, sinks and pipeline SQL **cannot be changed after creation** — delete and recreate (`pnpm teardown && pnpm launch`)
 - 20 streams, 20 sinks and 20 pipelines per account; 5 MB per ingest request; 1 GB/s per stream
 - Basin SQL is read-only and has no `OFFSET`, `UNNEST`, `PIVOT` or `LATERAL` (the semantic layer emulates `OFFSET`)
+
+## Cost & abuse protection
+
+Every uncached query is a billed Basin SQL query (10 MB minimum), and every accepted event is billed by Basin Pipelines and makes later scans bigger. Basin has no spend caps or budget alerts, so the limits sit in front of it. Rough costs if someone hammers a public deployment: 1M uncached queries ≈ $25; junk ingest ≈ $0.10/GB, plus larger scans for every query after it.
+
+What's on by default:
+
+- **Ingest auth**: `AUTH_ENABLED` is `"true"`. Launch generates `ICELIGHT_INGEST_TOKEN` in `.env` and sets it as the ingest worker's `AUTH_TOKEN` and the query API's `INGEST_AUTH_TOKEN` (used by the daily cron). Seeding sends it automatically. Browser write keys are visible to anyone, so the rate limit is the real bound.
+- **Per-IP rate limits** (Workers rate limiting bindings, set in `wrangler.jsonc`): ingest 300 requests/min with a 2 MB body cap; query API 300 requests/min on `/query`, `/tables`, `/cubejs-api`, `/mcp` and `/api/dashboards`. Over the limit returns 429 with `Retry-After`.
+- **Cache bypass for authenticated callers only**: `X-Cache-Control: no-cache` is ignored unless `API_TOKEN` is set, so anonymous callers always hit the KV cache.
+
+Optional:
+
+- **`API_TOKEN`** (query API secret): requires a Bearer token for queries, MCP and dashboards. Use it for private deployments; the UI then shows a token field in the navbar.
+- **`ICELIGHT_PUBLIC_DEMO="true"`** in `.env` (then `pnpm launch`): lets anonymous visitors send events through the query API's `/v1/*` proxy, which adds the write key for them. Limited to 20 requests/min per IP and 64 KB per request. This is how the [live demo](https://try.icelight.dev)'s Event Simulator works. Without it, the simulator needs the write key.
+- **Further hardening** (not automated): set `"workers_dev": false` so all traffic goes through your custom domain (`ICELIGHT_QUERY_DOMAIN`), then add a WAF rate-limiting rule on that zone. workers.dev URLs bypass zone WAF rules.
+
+### Upgrading an existing deployment
+
+Run `pnpm launch` to generate the write key and set the secrets. If you only run `pnpm deploy:ingest`, the ingest worker returns 500 "Authentication is enabled but no token is configured" until you set it by hand:
+
+```bash
+TOKEN=$(openssl rand -base64 32)
+echo "ICELIGHT_INGEST_TOKEN=\"$TOKEN\"" >> .env
+echo "$TOKEN" | npx wrangler secret put AUTH_TOKEN --config workers/event-ingest/wrangler.local.jsonc
+echo "$TOKEN" | npx wrangler secret put INGEST_AUTH_TOKEN --config workers/query-api/wrangler.local.jsonc
+```
 
 ## Documentation
 

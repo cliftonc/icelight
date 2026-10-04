@@ -3,6 +3,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { randomBytes } from 'crypto';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import type { SavedEnv } from './types.js';
@@ -72,6 +73,18 @@ export function saveToEnvFile(key: string, value: string): void {
   }
 
   writeFileSync(envFilePath, content);
+}
+
+/**
+ * Get the ingest write key from .env, generating and saving one on first use.
+ * It is the ingest worker's AUTH_TOKEN and the query API's INGEST_AUTH_TOKEN.
+ */
+export function getOrCreateIngestToken(): string {
+  const existing = loadEnvFile().ICELIGHT_INGEST_TOKEN;
+  if (existing) return existing;
+  const token = `ice_${randomBytes(24).toString('base64url')}`;
+  saveToEnvFile('ICELIGHT_INGEST_TOKEN', token);
+  return token;
 }
 
 /**

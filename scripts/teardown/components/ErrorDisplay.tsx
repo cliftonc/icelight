@@ -9,11 +9,14 @@ import chalk from 'chalk';
 
 interface ErrorDisplayProps {
   error: Error;
+  /** Box title (reseed reuses this component) */
+  title?: string;
   onExit: () => void;
 }
 
 export function ErrorDisplay({
   error,
+  title = 'Teardown Failed',
   onExit,
 }: ErrorDisplayProps): React.ReactElement {
   // Auto-exit after showing error
@@ -24,7 +27,7 @@ export function ErrorDisplay({
     return () => clearTimeout(timer);
   }, [onExit]);
 
-  const titleBox = boxen(chalk.hex('#ef4444')('Teardown Failed'), {
+  const titleBox = boxen(chalk.hex('#ef4444')(title), {
     padding: { left: 2, right: 2, top: 0, bottom: 0 },
     borderColor: '#ef4444',
     borderStyle: 'round',

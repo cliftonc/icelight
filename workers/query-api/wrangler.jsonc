@@ -21,6 +21,12 @@
   // - CF_ACCOUNT_ID: Your Cloudflare account ID
   // - CF_API_TOKEN: API token with Basin SQL Read + Basin Catalog + R2 Storage permissions
   // - API_TOKEN (optional): Bearer token for query API auth
+  // - INGEST_AUTH_TOKEN: the ingest worker's AUTH_TOKEN (set by pnpm launch),
+  //   used by the daily cron and, with PUBLIC_DEMO, the /v1/* proxy
+  //
+  // PUBLIC_DEMO (var, set by pnpm launch from ICELIGHT_PUBLIC_DEMO in .env):
+  // "true" lets anonymous visitors send events through /v1/* (the Event
+  // Simulator), limited to 64 KB requests and DEMO_INGEST_RATE_LIMITER.
   //
   // Ingest worker communication (choose ONE method):
   //
@@ -44,7 +50,16 @@
   // Runs at 2 AM UTC daily to generate demo events and reset dashboard
   "triggers": {
     "crons": ["0 2 * * *"]
-  }
+  },
+
+  // Per-IP rate limits (period must be 10 or 60 seconds). Every uncached query
+  // is billed by Basin SQL (minimum 10 MB scanned), so keep these on for any
+  // public deployment. A dashboard load is ~25 requests.
+  // namespace_id is any integer, unique per rate limiter in your account.
+  "ratelimits": [
+    { "name": "RATE_LIMITER", "namespace_id": "41002", "simple": { "limit": 300, "period": 60 } },
+    { "name": "DEMO_INGEST_RATE_LIMITER", "namespace_id": "41003", "simple": { "limit": 20, "period": 60 } }
+  ]
 
   // KV namespace for drizzle-cube query caching (optional)
   // Created automatically by: pnpm launch

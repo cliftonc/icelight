@@ -6,9 +6,10 @@
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `AUTH_ENABLED` | string | `"false"` | Set to `"true"` to require authentication |
-| `AUTH_TOKEN` | secret | - | API token for authentication (set via `wrangler secret`) |
+| `AUTH_ENABLED` | string | `"true"` | Require a write key on every request; `"false"` turns auth off |
+| `AUTH_TOKEN` | secret | - | The write key. `pnpm launch` generates it (`ICELIGHT_INGEST_TOKEN` in `.env`) and sets it |
 | `ALLOWED_ORIGINS` | string | `"*"` | Comma-separated list of allowed CORS origins |
+| `RATE_LIMITER` | binding | 300/min | Per-IP rate limit (see [Rate limits](#rate-limits)) |
 
 ### Query Worker
 
@@ -17,8 +18,12 @@
 | `CF_ACCOUNT_ID` | secret | Yes | Your Cloudflare account ID |
 | `CF_API_TOKEN` | secret | Yes | Cloudflare API token with Basin SQL permissions |
 | `WAREHOUSE_NAME` | string | Yes | Basin Catalog warehouse, `<account-id>_<bucket>` (from `wrangler basin catalog get <bucket>`) |
-| `API_TOKEN` | secret | No | Optional Bearer token for query API authentication |
+| `API_TOKEN` | secret | No | Optional Bearer token for queries, MCP and dashboards; also enables `X-Cache-Control: no-cache` |
 | `ALLOWED_ORIGINS` | string | `"*"` | Comma-separated list of allowed CORS origins |
+| `INGEST_AUTH_TOKEN` | secret | Yes, with ingest auth | The ingest worker's `AUTH_TOKEN`, used by the daily cron and the public demo proxy. Set by `pnpm launch` |
+| `PUBLIC_DEMO` | string | No | `"true"` lets anonymous visitors send events through `/v1/*` (see [Public demo](#public-demo)). Set by launch from `ICELIGHT_PUBLIC_DEMO` |
+| `RATE_LIMITER` | binding | No | Per-IP limit for `/query`, `/tables`, `/cubejs-api`, `/mcp`, `/api/dashboards` (300/min) |
+| `DEMO_INGEST_RATE_LIMITER` | binding | No | Per-IP limit for `/v1/*` when `PUBLIC_DEMO` is on (20/min) |
 
 ### Setup Script (`.env`)
 
@@ -29,6 +34,8 @@
 | `ICELIGHT_PROJECT_NAME` | `icelight` | Project name; all resource names derive from it |
 | `ICELIGHT_API_TOKEN` | - | API token used for the sink, Basin SQL and worker secrets |
 | `ICELIGHT_QUERY_DOMAIN` | - | Optional custom domain for the query API / web UI (e.g. `analytics.example.com`) |
+| `ICELIGHT_INGEST_TOKEN` | generated | Ingest write key. Launch generates it, sets it on both workers, and seeding sends it |
+| `ICELIGHT_PUBLIC_DEMO` | - | `"true"` sets `PUBLIC_DEMO` on the query API (anonymous Event Simulator ingest) |
 
 Resource names derived from the project name (e.g. `icelight`):
 
@@ -41,7 +48,7 @@ Resource names derived from the project name (e.g. `icelight`):
 | KV namespace | `icelight-query-cache` |
 | D1 database | `icelight-dashboards` |
 
-`pnpm generate-events` reads `INGEST_API_URL` (default `http://localhost:8787`).
+`pnpm generate-events` reads `INGEST_API_URL` (default `http://localhost:8787`) and `ICELIGHT_INGEST_TOKEN` (default: from `.env`).
 
 ## Wrangler Configuration
 
@@ -55,9 +62,14 @@ Resource names derived from the project name (e.g. `icelight`):
   "compatibility_flags": ["nodejs_compat"],
 
   "vars": {
-    "AUTH_ENABLED": "false",
+    "AUTH_ENABLED": "true",
     "ALLOWED_ORIGINS": "*"
   },
+  // AUTH_TOKEN set via wrangler secret (pnpm launch does it)
+
+  "ratelimits": [
+    { "name": "RATE_LIMITER", "namespace_id": "41001", "simple": { "limit": 300, "period": 60 } }
+  ],
 
   // Added to wrangler.local.jsonc by pnpm launch.
   // The binding points at the Basin Pipelines *stream* ID (the older `pipeline` field is deprecated).
@@ -82,11 +94,16 @@ Resource names derived from the project name (e.g. `icelight`):
   "vars": {
     "WAREHOUSE_NAME": "<account-id>_<bucket>"
   },
-  // CF_ACCOUNT_ID, CF_API_TOKEN set via wrangler secret
+  // CF_ACCOUNT_ID, CF_API_TOKEN, INGEST_AUTH_TOKEN set via wrangler secret
 
   // Proxies /v1/* to the ingest worker (used by the UI's event simulator and the daily cron)
   "services": [
     { "binding": "INGEST_API", "service": "icelight-event-ingest", "remote": true }
+  ],
+
+  "ratelimits": [
+    { "name": "RATE_LIMITER", "namespace_id": "41002", "simple": { "limit": 300, "period": 60 } },
+    { "name": "DEMO_INGEST_RATE_LIMITER", "namespace_id": "41003", "simple": { "limit": 20, "period": 60 } }
   ]
 }
 ```
@@ -95,40 +112,60 @@ Resource names derived from the project name (e.g. `icelight`):
 
 ### Ingestion Authentication
 
-The ingestion worker supports multiple authentication methods:
+Authentication is on by default (`AUTH_ENABLED: "true"`). `pnpm launch` generates a write key, saves it to `.env` as `ICELIGHT_INGEST_TOKEN`, and sets it as the ingest worker's `AUTH_TOKEN` and the query worker's `INGEST_AUTH_TOKEN` secrets. Seeding (`pnpm launch`, `pnpm reseed`, `pnpm generate-events`) sends it automatically.
+
+Clients can send the write key in any of these:
 
 1. **Bearer Token**: `Authorization: Bearer <token>`
-2. **Basic Auth**: `Authorization: Basic <base64>` (username is the token)
+2. **Basic Auth**: `Authorization: Basic <base64>` (username is the token). This is what Analytics.js SDKs send for `writeKey`
 3. **API Key Header**: `X-API-Key: <token>`
 
-To enable authentication:
+A write key in browser code is visible to anyone, so the per-IP [rate limit](#rate-limits) is what bounds abuse.
+
+**Upgrading a deployment created before auth was on by default**: run `pnpm launch`. If you only run `pnpm deploy:ingest`, every request returns 500 "Authentication is enabled but no token is configured" until you set the token by hand:
 
 ```bash
-# Set the secret
-wrangler secret put AUTH_TOKEN --config workers/event-ingest/wrangler.jsonc
-
-# Update wrangler.jsonc
-"vars": {
-  "AUTH_ENABLED": "true"
-}
-
-# Redeploy
-pnpm deploy:ingest
+TOKEN=$(openssl rand -base64 32)
+echo "ICELIGHT_INGEST_TOKEN=\"$TOKEN\"" >> .env
+echo "$TOKEN" | npx wrangler secret put AUTH_TOKEN --config workers/event-ingest/wrangler.local.jsonc
+echo "$TOKEN" | npx wrangler secret put INGEST_AUTH_TOKEN --config workers/query-api/wrangler.local.jsonc
 ```
+
+To turn auth off, set `"AUTH_ENABLED": "false"` and redeploy.
 
 ### Query API Authentication
 
-Optional Bearer token authentication:
+Optional Bearer token authentication, recommended for private deployments:
 
 ```bash
 # Set the secret
-wrangler secret put API_TOKEN --config workers/query-api/wrangler.jsonc
+wrangler secret put API_TOKEN --config workers/query-api/wrangler.local.jsonc
 
 # Redeploy
 pnpm deploy:query
 ```
 
-Requests must include: `Authorization: Bearer <token>`
+Requests to `/query`, `/tables`, `/cubejs-api`, `/mcp` and `/api/dashboards` must then include `Authorization: Bearer <token>`. The web UI reads `GET /api/config` (always public) and shows a token field in the navbar when auth is required.
+
+`X-Cache-Control: no-cache` (skip the KV query cache) is only honoured when `API_TOKEN` is set, so anonymous callers can't force billed Basin SQL queries.
+
+## Rate Limits
+
+Both workers use [Workers rate limiting](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/) bindings, keyed by client IP (`CF-Connecting-IP`). Over the limit, requests get 429 with `Retry-After: 60`.
+
+| Worker | Binding | Default | Applies to |
+|--------|---------|---------|-----------|
+| Ingest | `RATE_LIMITER` | 300/min | All POSTs; bodies are also capped at 2 MB |
+| Query | `RATE_LIMITER` | 300/min | `/query`, `/tables`, `/cubejs-api`, `/mcp`, `/api/dashboards`, `/v1/*` |
+| Query | `DEMO_INGEST_RATE_LIMITER` | 20/min | `/v1/*` when `PUBLIC_DEMO` is on; bodies capped at 64 KB |
+
+To change a limit, edit `ratelimits` in the worker's `wrangler.jsonc`, then `pnpm launch` (to regenerate `wrangler.local.jsonc`) and redeploy. `period` must be `10` or `60` seconds. `namespace_id` is any integer, but must be unique per rate limiter in your account: workers that share an ID share counters. A dashboard load is about 25 requests, so don't set the query limit much below 60.
+
+The limits are approximate (counted per Cloudflare location). For stricter control, set `"workers_dev": false` so all traffic goes through your [custom domain](#custom-domain), then add a WAF rate-limiting rule on that zone. workers.dev URLs bypass zone WAF rules.
+
+## Public Demo
+
+Set `ICELIGHT_PUBLIC_DEMO="true"` in `.env` and run `pnpm launch` to let anonymous visitors use the Event Simulator. The query worker's `/v1/*` proxy then adds `INGEST_AUTH_TOKEN` to requests on their behalf, limited to 20 requests per minute per IP and 64 KB per request. Without it, the simulator asks for the write key.
 
 ## CORS Configuration
 

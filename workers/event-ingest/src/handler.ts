@@ -1,6 +1,7 @@
 import { Hono, Context } from "hono";
 import { cors } from "hono/cors";
 import type { FlattenedEvent } from "@icelight/core";
+import { bodyLimit } from "hono/body-limit";
 import { authMiddleware } from "./auth.js";
 import { processBatch, processSingleEvent } from "./batch.js";
 
@@ -17,7 +18,12 @@ export interface IngestEnv {
   AUTH_ENABLED?: string;
   AUTH_TOKEN?: string;
   ALLOWED_ORIGINS?: string;
+  /** Per-IP rate limit (wrangler `ratelimits`); requests pass through without it */
+  RATE_LIMITER?: RateLimit;
 }
+
+/** Largest accepted request body. Basin Pipelines takes up to 5 MB per send() */
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 export interface IngestResponse {
   success: boolean;
@@ -47,6 +53,27 @@ export function createIngestApp() {
     });
     return corsMiddleware(c, next);
   });
+
+  // Per-IP rate limit, before auth so floods of bad tokens are limited too
+  app.use("*", async (c, next) => {
+    if (c.env.RATE_LIMITER && c.req.method === "POST") {
+      const key = c.req.header("CF-Connecting-IP") ?? "unknown";
+      const { success } = await c.env.RATE_LIMITER.limit({ key });
+      if (!success) {
+        c.header("Retry-After", "60");
+        return c.json({ success: false, message: "Too many requests, try again in a minute" }, 429);
+      }
+    }
+    await next();
+  });
+
+  app.use(
+    "*",
+    bodyLimit({
+      maxSize: MAX_BODY_BYTES,
+      onError: (c) => c.json({ success: false, message: "Request body too large (max 2 MB)" }, 413),
+    }),
+  );
 
   // Auth middleware
   app.use(

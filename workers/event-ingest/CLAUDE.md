@@ -47,8 +47,13 @@ This worker is self-contained with all ingestion logic in the `src/` directory.
   "compatibility_flags": ["nodejs_compat"],
 
   "vars": {
-    "AUTH_ENABLED": "false"
+    "AUTH_ENABLED": "true"
   },
+
+  // Per-IP rate limit (period 10 or 60s; namespace_id unique per account)
+  "ratelimits": [
+    { "name": "RATE_LIMITER", "namespace_id": "41001", "simple": { "limit": 300, "period": 60 } }
+  ],
 
   // Added to wrangler.local.jsonc by pnpm launch (stream ID, not pipeline ID).
   // The older `pipeline` field is deprecated in favour of `stream`.
@@ -66,9 +71,10 @@ This worker is self-contained with all ingestion logic in the `src/` directory.
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `PIPELINE` | Yes | Basin Pipelines stream binding (configured in wrangler.local.jsonc) |
-| `AUTH_ENABLED` | No | Set to "true" to require authentication |
-| `AUTH_TOKEN` | If auth enabled | Secret token (set via `wrangler secret`) |
+| `AUTH_ENABLED` | No | `"true"` by default; `"false"` turns auth off |
+| `AUTH_TOKEN` | If auth enabled | Write key secret. `pnpm launch` generates it (`ICELIGHT_INGEST_TOKEN` in `.env`) and sets it |
 | `ALLOWED_ORIGINS` | No | Comma-separated CORS origins (default: "*") |
+| `RATE_LIMITER` | No | Per-IP rate limit binding (300/min); without it requests aren't limited |
 
 ## Endpoints
 
@@ -82,6 +88,8 @@ This worker is self-contained with all ingestion logic in the `src/` directory.
 | POST | `/v1/group` | Single group event |
 | POST | `/v1/alias` | Single alias event |
 | GET | `/health` | Health check |
+
+Every request needs the write key (`Authorization: Bearer`, Basic auth username, or `X-API-Key`) unless `AUTH_ENABLED` is `"false"`. POSTs are rate-limited per IP (`CF-Connecting-IP`; 429 with `Retry-After`) and bodies are capped at 2 MB (413). With `AUTH_ENABLED` on and no `AUTH_TOKEN` secret, every request returns 500 "Authentication is enabled but no token is configured": run `pnpm launch`, or set `AUTH_TOKEN` (and the same value as the query API's `INGEST_AUTH_TOKEN`).
 
 ## Development
 
@@ -105,9 +113,9 @@ pnpm deploy
 
 2. **Check the stream binding** in `wrangler.local.jsonc` (`wrangler basin pipelines streams list` shows the stream ID)
 
-3. **Set secrets** (if using auth):
+3. **Secrets**: launch sets `AUTH_TOKEN` from `ICELIGHT_INGEST_TOKEN` in `.env`. To set it by hand:
    ```bash
-   wrangler secret put AUTH_TOKEN
+   wrangler secret put AUTH_TOKEN --config wrangler.local.jsonc
    ```
 
 4. **Deploy**:
@@ -121,14 +129,16 @@ pnpm deploy
 # Start dev server
 pnpm dev
 
-# Send test event
+# Send test event (with the write key from .env)
 curl -X POST http://localhost:8787/v1/track \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $ICELIGHT_INGEST_TOKEN" \
   -d '{"userId": "test", "event": "Test Event"}'
 
 # Send batch
 curl -X POST http://localhost:8787/v1/batch \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $ICELIGHT_INGEST_TOKEN" \
   -d '{"batch": [{"type": "track", "userId": "test", "event": "Test"}]}'
 ```
 
@@ -141,7 +151,7 @@ Compatible with:
 - Segment Analytics.js
 - Any SDK using the Segment HTTP API format
 
-Configure SDK to point to this worker's URL as the data plane.
+Configure SDK to point to this worker's URL as the data plane, with `ICELIGHT_INGEST_TOKEN` as the `writeKey` (sent as Basic auth).
 
 ## Notes
 

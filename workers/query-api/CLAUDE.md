@@ -33,6 +33,7 @@ Client / UI → query-api Worker ──┬─ /query, /tables ──────
 | `src/query/cubes/events.ts` | Events cube (measures/dimensions) |
 | `src/query/cubes/json-helpers.ts` | JSON dimension helpers using `json_get_str/float/bool` |
 | `src/query/formatter.ts` | JSON/CSV output formatting |
+| `src/query/protection.ts` | `apiAuth`, per-IP `rateLimit`, anonymous cache-bypass stripping |
 | `src/cache/` | KV cache provider for drizzle-cube |
 | `src/dashboards/` | D1-backed dashboard routes |
 | `src/cron/` | Daily demo event generation |
@@ -64,8 +65,13 @@ Note: drizzle-cube rebuilds its executor from `(drizzle, schema, engineType)` on
   },
   "services": [
     { "binding": "INGEST_API", "service": "icelight-event-ingest", "remote": true }
+  ],
+  // Per-IP rate limits (period 10 or 60s; namespace_id unique per account)
+  "ratelimits": [
+    { "name": "RATE_LIMITER", "namespace_id": "41002", "simple": { "limit": 300, "period": 60 } },
+    { "name": "DEMO_INGEST_RATE_LIMITER", "namespace_id": "41003", "simple": { "limit": 20, "period": 60 } }
   ]
-  // CF_ACCOUNT_ID, CF_API_TOKEN set via wrangler secret
+  // CF_ACCOUNT_ID, CF_API_TOKEN, INGEST_AUTH_TOKEN set via wrangler secret
   // kv_namespaces (CACHE) and d1_databases (DB) added to wrangler.local.jsonc by pnpm launch
 }
 ```
@@ -77,7 +83,11 @@ Note: drizzle-cube rebuilds its executor from `(drizzle, schema, engineType)` on
 | `CF_ACCOUNT_ID` | Yes | Secret | Cloudflare account ID |
 | `CF_API_TOKEN` | Yes | Secret | API token with Basin SQL Read, Basin Catalog and R2 Storage permissions |
 | `WAREHOUSE_NAME` | Yes | Var | Basin Catalog warehouse, `<account-id>_<bucket>` |
-| `API_TOKEN` | No | Secret | Optional Bearer token for API auth |
+| `API_TOKEN` | No | Secret | Optional Bearer token for queries, MCP and dashboards; also enables `X-Cache-Control: no-cache` |
+| `INGEST_AUTH_TOKEN` | With ingest auth | Secret | Ingest worker's `AUTH_TOKEN`, sent by the cron and the public demo proxy (set by `pnpm launch`) |
+| `PUBLIC_DEMO` | No | Var | `"true"`: anonymous `/v1/*` ingest with `INGEST_AUTH_TOKEN` added (set by launch from `ICELIGHT_PUBLIC_DEMO`) |
+| `RATE_LIMITER` | No | Rate limit binding | Per-IP limit (300/min) for `/query`, `/tables`, `/cubejs-api`, `/mcp`, `/api/dashboards`, `/v1/*` |
+| `DEMO_INGEST_RATE_LIMITER` | No | Rate limit binding | Per-IP limit (20/min) for `/v1/*` when `PUBLIC_DEMO` is on |
 | `ALLOWED_ORIGINS` | No | Var | Comma-separated CORS origins |
 | `INGEST_API` / `INGEST_API_URL` | No | Service binding / Var | Ingest worker for `/v1/*` proxy and cron |
 | `CACHE` | No | KV binding | drizzle-cube query cache |
@@ -93,6 +103,8 @@ Note: drizzle-cube rebuilds its executor from `(drizzle, schema, engineType)` on
 | GET | `/cubejs-api/v1/meta` | Semantic layer metadata |
 | GET/POST | `/cubejs-api/v1/load` | Execute semantic query |
 | * | `/api/dashboards` | Dashboard CRUD (D1) |
+| GET | `/api/config` | Public `{ authRequired, publicDemo }` for the UI |
+| POST | `/mcp` | drizzle-cube MCP server |
 | * | `/v1/*` | Proxy to ingest worker |
 | GET | `/health` | Health check |
 
@@ -160,3 +172,13 @@ curl -X POST https://icelight-query-api.<subdomain>.workers.dev/query \
 - Worker URL pattern: `https://icelight-query-api.<subdomain>.workers.dev`
 - Data must exist in R2 (run events through the ingest worker first, or `pnpm generate-events`)
 - Query errors return 400 with the error message from the Basin SQL API
+
+## Cost & Abuse Protection
+
+Every uncached query is billed by Basin SQL (10 MB minimum), so the worker limits anonymous use:
+
+- `API_TOKEN`, when set, protects every API route (including `/health` and `/api/dashboards`) except `/api/config` and static assets
+- Per-IP `RATE_LIMITER` returns 429 with `Retry-After: 60`
+- `X-Cache-Control: no-cache` is stripped unless `API_TOKEN` is set, so anonymous callers always hit the KV cache
+- `/v1/*` forwards the caller's write key; with `PUBLIC_DEMO=true` it adds `INGEST_AUTH_TOKEN` itself, after `DEMO_INGEST_RATE_LIMITER` and a 64 KB body cap
+- The UI reads `/api/config` to decide whether to show the navbar token field, and sends the token to `/query`, the semantic API (`CubeProvider` `token`) and `/api/dashboards`. The AI assistant is off (`enableAI: false`) and dashboards are rows-only

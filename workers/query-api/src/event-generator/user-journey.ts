@@ -15,6 +15,9 @@ import {
   generateGroupEvent,
 } from './generator.js';
 
+/** Return visits happen within this long of a user's first session */
+const RETURN_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
 /**
  * Generate sessions for a single user across the time range
  */
@@ -30,12 +33,18 @@ function generateUserSessions(
   const sessionCount = randomInt(1, 5, random);
   const eventsPerSession = Math.ceil(eventsPerUser / sessionCount);
 
-  // Spread sessions across the time range
-  const timeRange = endDate.getTime() - startDate.getTime();
-  const sessionGap = timeRange / (sessionCount + 1);
+  // First session at signup, return visits within two weeks of it (or the
+  // whole range, if shorter). Visits that would fall after the end of the
+  // range are dropped rather than squeezed in, so activity is spread evenly
+  // and users fall into different retention cohorts.
+  const firstMs = Math.max(user.createdAt.getTime(), startDate.getTime());
+  const returnWindow = Math.min(RETURN_WINDOW_MS, endDate.getTime() - startDate.getTime());
+  const offsets = [0, ...Array.from({ length: sessionCount - 1 }, () => random() * returnWindow)]
+    .sort((a, b) => a - b)
+    .filter((offset) => firstMs + offset < endDate.getTime());
 
-  for (let i = 0; i < sessionCount; i++) {
-    const sessionStartMs = startDate.getTime() + sessionGap * (i + 0.5 + random() * 0.5);
+  for (let i = 0; i < offsets.length; i++) {
+    const sessionStartMs = firstMs + offsets[i];
     const sessionStart = new Date(sessionStartMs);
 
     // Sessions last 5-60 minutes

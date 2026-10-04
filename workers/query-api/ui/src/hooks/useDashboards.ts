@@ -7,6 +7,7 @@ import type {
   CreateDashboardRequest,
   UpdateDashboardRequest
 } from '../types/dashboard'
+import { apiFetch } from '../api/auth'
 
 const API_BASE = '/api/dashboards'
 
@@ -15,7 +16,7 @@ export function useDashboards() {
   return useQuery({
     queryKey: ['dashboards'],
     queryFn: async (): Promise<DashboardRecord[]> => {
-      const response = await fetch(API_BASE)
+      const response = await apiFetch(API_BASE)
       if (!response.ok) {
         throw new Error('Failed to fetch dashboards')
       }
@@ -33,7 +34,7 @@ export function useDefaultDashboard() {
   return useQuery({
     queryKey: ['dashboards', 'default'],
     queryFn: async (): Promise<DashboardRecord | null> => {
-      const response = await fetch(`${API_BASE}/default`)
+      const response = await apiFetch(`${API_BASE}/default`)
       if (response.status === 404) {
         return null
       }
@@ -54,7 +55,7 @@ export function useDashboard(id: string | undefined) {
   return useQuery({
     queryKey: ['dashboards', id],
     queryFn: async (): Promise<DashboardRecord> => {
-      const response = await fetch(`${API_BASE}/${id}`)
+      const response = await apiFetch(`${API_BASE}/${id}`)
       if (!response.ok) {
         throw new Error('Failed to fetch dashboard')
       }
@@ -74,7 +75,7 @@ export function useCreateDashboard() {
 
   return useMutation({
     mutationFn: async (dashboardData: CreateDashboardRequest): Promise<DashboardRecord> => {
-      const response = await fetch(API_BASE, {
+      const response = await apiFetch(API_BASE, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -107,7 +108,7 @@ export function useUpdateDashboard() {
       id,
       ...dashboardData
     }: UpdateDashboardRequest & { id: string }): Promise<DashboardRecord> => {
-      const response = await fetch(`${API_BASE}/${id}`, {
+      const response = await apiFetch(`${API_BASE}/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -141,7 +142,7 @@ export function useDeleteDashboard() {
 
   return useMutation({
     mutationFn: async (id: string): Promise<void> => {
-      const response = await fetch(`${API_BASE}/${id}`, {
+      const response = await apiFetch(`${API_BASE}/${id}`, {
         method: 'DELETE'
       })
 
@@ -161,7 +162,7 @@ export function useSetDefaultDashboard() {
 
   return useMutation({
     mutationFn: async (id: string): Promise<DashboardRecord> => {
-      const response = await fetch(`${API_BASE}/${id}/set-default`, {
+      const response = await apiFetch(`${API_BASE}/${id}/set-default`, {
         method: 'POST'
       })
 
@@ -187,7 +188,7 @@ export function useResetDashboard() {
 
   return useMutation({
     mutationFn: async (): Promise<DashboardRecord> => {
-      const response = await fetch(`${API_BASE}/default/reset`, {
+      const response = await apiFetch(`${API_BASE}/default/reset`, {
         method: 'POST'
       })
 
@@ -212,7 +213,7 @@ export function useDefaultDashboardConfig() {
   return useQuery({
     queryKey: ['dashboards', 'config', 'default'],
     queryFn: async (): Promise<DashboardConfig> => {
-      const response = await fetch(`${API_BASE}/config/default`)
+      const response = await apiFetch(`${API_BASE}/config/default`)
       if (!response.ok) {
         throw new Error('Failed to fetch default config')
       }
@@ -231,7 +232,7 @@ export function useResetDashboardById() {
 
   return useMutation({
     mutationFn: async (id: string): Promise<DashboardRecord> => {
-      const response = await fetch(`${API_BASE}/${id}/reset`, {
+      const response = await apiFetch(`${API_BASE}/${id}/reset`, {
         method: 'POST'
       })
 

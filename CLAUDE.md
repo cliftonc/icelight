@@ -45,6 +45,7 @@ icelight/
 ├── scripts/                     # Infrastructure management
 │   ├── setup/                   # pnpm launch (Ink UI): Basin resources, deploy, demo seed
 │   ├── teardown/                # pnpm teardown (also removes legacy DuckDB worker/container)
+│   ├── reseed/                  # pnpm reseed: wipe analytics.events and seed fresh demo data
 │   ├── shared/                  # Shared Ink components + seed-events.ts
 │   └── generate-events.ts       # pnpm generate-events (demo data)
 ├── templates/                   # Configuration templates
@@ -99,6 +100,7 @@ pnpm deploy:all
 # Infrastructure
 pnpm launch     # Create R2 bucket, Basin Catalog, stream/sink/pipeline, deploy workers, seed demo data
 pnpm teardown   # Delete infrastructure
+pnpm reseed [days]  # Wipe analytics.events and seed fresh demo data (keeps workers/stream)
 
 # Demo data
 INGEST_API_URL=<ingest url> pnpm generate-events [days] [batchSize]
@@ -108,9 +110,20 @@ INGEST_API_URL=<ingest url> pnpm generate-events [days] [batchSize]
 
 - **Code changes only** (query API, UI, dashboards, cubes, ingest handler): `pnpm deploy:query` / `pnpm deploy:ingest`. Fast, touches nothing else.
 - **Missing or broken infrastructure / regenerate `wrangler.local.jsonc`**: `pnpm launch` (idempotent - skips resources that exist, prompts before redeploying workers).
+- **Wipe and reseed demo data**: `pnpm reseed [days]` (default 30). Keeps the bucket, catalog, stream (so no ingest redeploy), workers, KV and D1; deletes the pipeline and sink, drops the `analytics.events` catalog table and its R2 files, recreates sink + pipeline, seeds, waits for the data to land, then purges the drizzle-cube KV cache. `--confirm` skips the prompt, `--reset-dashboard` also resets the default dashboard.
 - **Schema or pipeline changes**: `pnpm teardown && pnpm launch` (streams, sinks and pipeline SQL are immutable). Teardown deletes all event data unless `--keep-bucket`.
 - **Default dashboard** (`workers/query-api/src/dashboards/default-dashboard.ts`) is stored in D1: redeploying doesn't change an existing copy. Refresh it from the UI, or wait for the daily cron (02:00 UTC) which re-saves it.
 - **Custom domain**: set `ICELIGHT_QUERY_DOMAIN` in `.env`; launch adds it as a Workers custom domain (and keeps workers.dev enabled).
+- **Public demo**: set `ICELIGHT_PUBLIC_DEMO="true"` in `.env`; launch adds `PUBLIC_DEMO=true` to the query API so anonymous Event Simulator traffic can go through `/v1/*`.
+
+### Cost & abuse protection
+
+Basin SQL bills every uncached query (10 MB minimum) and Basin Pipelines bills every accepted event, with no spend caps, so both workers are protected by default:
+
+- **Ingest auth on by default** (`AUTH_ENABLED: "true"`). `pnpm launch` generates `ICELIGHT_INGEST_TOKEN` in `.env` (`getOrCreateIngestToken()` in `scripts/setup/core/env.ts`) and sets it as the ingest worker's `AUTH_TOKEN` and the query API's `INGEST_AUTH_TOKEN` secrets. Seeding (`seedEvents()`) and the cron send it.
+- **Per-IP rate limits** via `ratelimits` bindings in each `wrangler.jsonc`: ingest `RATE_LIMITER` 300/min (+ 2 MB body cap); query `RATE_LIMITER` 300/min on `/query`, `/tables`, `/cubejs-api`, `/mcp`, `/api/dashboards`; `DEMO_INGEST_RATE_LIMITER` 20/min (+ 64 KB cap) on `/v1/*` when `PUBLIC_DEMO` is on. Middleware is in `workers/query-api/src/query/protection.ts`.
+- **`API_TOKEN`** (optional) now also protects `/api/dashboards`. `GET /api/config` (public) returns `{ authRequired, publicDemo }`; the UI only shows the navbar token field when `authRequired`.
+- **Upgrade gotcha**: a deployment created before ingest auth was on returns 500 "Authentication is enabled but no token is configured" after `pnpm deploy:ingest`. Run `pnpm launch`, or set the same token as `AUTH_TOKEN` (ingest), `INGEST_AUTH_TOKEN` (query) and `ICELIGHT_INGEST_TOKEN` (`.env`).
 
 ### Query API surfaces
 
@@ -118,8 +131,9 @@ INGEST_API_URL=<ingest url> pnpm generate-events [days] [batchSize]
 - `/cubejs-api/v1/*` - drizzle-cube semantic API (dashboards, Analysis Builder)
 - `/mcp` - drizzle-cube MCP server (tools: discover, validate, load, chart)
 - `/api/dashboards` - D1 dashboard storage
+- `GET /api/config` - public `{ authRequired, publicDemo }` for the UI
 
-To check semantic-layer queries against a deployed worker, call `/cubejs-api/v1/load?query=<url-encoded JSON>` with header `X-Cache-Control: no-cache` (bypasses the KV result cache).
+To check semantic-layer queries against a deployed worker, call `/cubejs-api/v1/load?query=<url-encoded JSON>` with header `X-Cache-Control: no-cache`. That bypasses the KV result cache **only when `API_TOKEN` is set** (send the Bearer token too). On open deployments (like the demo) the header is ignored, so anonymous callers can't force billed Basin queries: purge the `drizzle-cube:` keys in the KV namespace (`pnpm reseed` does this) or wait for the 60-minute TTL.
 
 ## Tech Stack
 
@@ -238,9 +252,10 @@ interface PipelineBinding {
 // Ingest worker
 interface IngestEnv {
   PIPELINE?: PipelineBinding;
-  AUTH_ENABLED?: string;
-  AUTH_TOKEN?: string;
+  AUTH_ENABLED?: string;    // "true" by default (wrangler.jsonc)
+  AUTH_TOKEN?: string;      // Write key, set by pnpm launch from ICELIGHT_INGEST_TOKEN
   ALLOWED_ORIGINS?: string;
+  RATE_LIMITER?: RateLimit; // Per-IP rate limit
 }
 
 // Query worker
@@ -254,6 +269,10 @@ interface QueryEnv {
   INGEST_API_URL?: string;
   CACHE?: KVNamespace;      // drizzle-cube query cache
   DB?: D1Database;          // Dashboard storage
+  RATE_LIMITER?: RateLimit; // Per-IP limit: query, semantic, MCP, dashboard routes
+  INGEST_AUTH_TOKEN?: string; // Ingest AUTH_TOKEN, for the cron and the public demo proxy
+  PUBLIC_DEMO?: string;     // "true": anonymous /v1/* ingest via this worker
+  DEMO_INGEST_RATE_LIMITER?: RateLimit; // Per-IP limit for the public demo /v1/* proxy
 }
 ```
 
@@ -265,9 +284,10 @@ interface QueryEnv {
 # Start local dev server
 pnpm dev:ingest
 
-# Send test event
+# Send test event (ingest auth is on by default: send ICELIGHT_INGEST_TOKEN from .env)
 curl -X POST http://localhost:8787/v1/track \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $ICELIGHT_INGEST_TOKEN" \
   -d '{
     "userId": "test-user",
     "event": "Test Event",
@@ -277,6 +297,7 @@ curl -X POST http://localhost:8787/v1/track \
 # Send batch
 curl -X POST http://localhost:8787/v1/batch \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $ICELIGHT_INGEST_TOKEN" \
   -d '{
     "batch": [
       {"type": "track", "userId": "u1", "event": "Event 1"},

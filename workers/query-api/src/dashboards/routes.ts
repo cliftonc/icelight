@@ -13,7 +13,7 @@ import type {
   DashboardListResponse,
   DashboardResponse,
 } from './types.js';
-import { defaultDashboardConfig, defaultDashboardRecord, DEFAULT_DASHBOARD_ID } from './default-dashboard.js';
+import { getDefaultDashboardConfig, getDefaultDashboardRecord, DEFAULT_DASHBOARD_ID } from './default-dashboard.js';
 
 /**
  * Environment type for dashboard routes
@@ -94,6 +94,7 @@ export function createDashboardRoutes() {
 
     if (rows.length === 0) {
       // No default dashboard exists, create one from the default config
+      const defaultDashboardRecord = getDefaultDashboardRecord();
       const timestamp = now();
       const newDashboard = {
         id: DEFAULT_DASHBOARD_ID,
@@ -148,7 +149,7 @@ export function createDashboardRoutes() {
     await db
       .update(dashboards)
       .set({
-        config: JSON.stringify(defaultDashboardConfig),
+        config: JSON.stringify(getDefaultDashboardConfig()),
         updatedAt: timestamp,
       })
       .where(eq(dashboards.id, existing[0].id));
@@ -324,7 +325,7 @@ export function createDashboardRoutes() {
 
   // GET /api/dashboards/config/default - Get the default dashboard config template
   app.get('/config/default', async (c) => {
-    return c.json({ success: true, data: defaultDashboardConfig });
+    return c.json({ success: true, data: getDefaultDashboardConfig() });
   });
 
   // POST /api/dashboards/:id/reset - Reset any dashboard to the default config
@@ -349,7 +350,7 @@ export function createDashboardRoutes() {
     await db
       .update(dashboards)
       .set({
-        config: JSON.stringify(defaultDashboardConfig),
+        config: JSON.stringify(getDefaultDashboardConfig()),
         updatedAt: timestamp,
       })
       .where(eq(dashboards.id, id));

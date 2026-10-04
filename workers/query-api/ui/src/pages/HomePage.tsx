@@ -434,6 +434,8 @@ interface HomePageProps {
 
 export default function HomePage({ onNavigate }: HomePageProps) {
   const [sdkTab, setSdkTab] = useState<'rudderstack' | 'http'>('rudderstack');
+  // This deployment's MCP endpoint (https://try.icelight.dev/mcp on the demo)
+  const mcpUrl = `${window.location.origin}/mcp`;
   const faqSections = [
     {
       title: 'Ingestion & Architecture',
@@ -547,9 +549,15 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             <br />
             <span className="text-primary">to Iceberg on R2</span>
           </h1>
-          <p className="text-lg text-base-content/60 mb-10 max-w-2xl mx-auto">
+          <p className="text-lg text-base-content/60 mb-6 max-w-2xl mx-auto">
             Analytics.js compatible events to Iceberg tables on Cloudflare.
             Query with Basin SQL or the semantic API.
+          </p>
+          <p className="text-sm text-base-content/70 mb-10 max-w-2xl mx-auto px-4 py-3 rounded border border-primary/30 bg-primary/5">
+            <strong>This is an example project, not a hosted service.</strong> Clone the repo and
+            run <code className="text-primary">pnpm launch</code> to deploy your own copy to your
+            Cloudflare account, then adapt the schema, cubes and dashboards to build your own
+            in-house product analytics.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <button
@@ -854,11 +862,11 @@ analytics.track('Purchase Completed', { revenue: 99.99 });`}
 
         <FlowConnector direction="right-to-left" />
 
-        {/* 7. Analytics Dashboards - Final destination */}
+        {/* 7. Analytics Dashboards */}
         <DetailSection
           id="dashboards"
           title="Analytics Dashboards"
-          description="The final destination for your analytics data. Build interactive dashboards that visualize user behavior, track conversions, and surface actionable insights. This repo provides a toolkit for you to use as a basis to build your own in-house MixPanel or Amplitude."
+          description="Build interactive dashboards that visualize user behavior, track conversions, and surface actionable insights. This repo provides a toolkit for you to use as a basis to build your own in-house MixPanel or Amplitude."
           align="left"
           image={{
             light: '/dashboard_light.png',
@@ -904,6 +912,48 @@ analytics.track('Purchase Completed', { revenue: 99.99 });`}
                 View Dashboard
               </button>
             </div>
+          </div>
+        </DetailSection>
+
+        <FlowConnector direction="left-to-right" />
+
+        {/* 8. MCP - ask Claude about your events */}
+        <DetailSection
+          id="mcp"
+          title="Ask Claude (MCP)"
+          description="The query API exposes the semantic layer as an MCP server, so Claude can answer questions about your events in plain English. It discovers the cubes, builds and validates the query, and runs it against Basin SQL. No SQL needed."
+          align="right"
+          image={{
+            light: '/claude_mcp.png',
+            dark: '/claude_mcp.png',
+            alt: 'Claude answering questions about icelight events and revenue over MCP',
+          }}
+          links={[
+            { label: 'Custom connectors in Claude', url: 'https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp' },
+            { label: 'MCP in Claude Code', url: 'https://code.claude.com/docs/en/mcp' },
+          ]}
+        >
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-medium text-sm text-base-content/80 mb-2">Claude (web, desktop and mobile)</h4>
+              <ol className="space-y-1 text-sm text-base-content/70 list-decimal list-inside">
+                <li>Open <strong>Settings → Connectors</strong> and choose <strong>Add custom connector</strong></li>
+                <li>Name it <strong>Icelight</strong> and use this URL:</li>
+              </ol>
+              <div className="mt-2">
+                <CodeBlock code={mcpUrl} language="plain" />
+              </div>
+              <p className="text-sm text-base-content/60 mt-2">
+                Then enable it in a chat and ask something like “How many events did we have this week, and which day had the most revenue?”
+              </p>
+            </div>
+            <div>
+              <h4 className="font-medium text-sm text-base-content/80 mb-2">Claude Code</h4>
+              <CodeBlock code={`claude mcp add --transport http icelight ${mcpUrl}`} />
+            </div>
+            <p className="text-xs text-base-content/50">
+              Tools: <code>discover</code>, <code>validate</code>, <code>load</code> and <code>chart</code>. If your deployment sets <code>API_TOKEN</code>, add <code>--header "Authorization: Bearer &lt;token&gt;"</code> in Claude Code.
+            </p>
           </div>
         </DetailSection>
       </div>

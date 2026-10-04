@@ -65,23 +65,15 @@ The generated ingest config binds the stream:
 }
 ```
 
-The query config sets `WAREHOUSE_NAME` to the Basin Catalog warehouse (`<account-id>_<bucket>`) and the `CF_ACCOUNT_ID` / `CF_API_TOKEN` secrets.
+The query config sets `WAREHOUSE_NAME` to the Basin Catalog warehouse (`<account-id>_<bucket>`) and the `CF_ACCOUNT_ID` / `CF_API_TOKEN` / `INGEST_AUTH_TOKEN` secrets.
 
 You can re-run `pnpm launch` at any time; it detects existing resources and only creates what's missing.
 
-## Step 4: Optional Authentication
+## Step 4: Authentication
 
-If you want ingestion authentication:
+Ingest authentication is on by default. Launch generates a write key, saves it to `.env` as `ICELIGHT_INGEST_TOKEN`, and sets it as the ingest worker's `AUTH_TOKEN` secret (and the query worker's `INGEST_AUTH_TOKEN`, for the daily cron). Send it with every event: as the SDK `writeKey`, or as `Authorization: Bearer <token>`.
 
-```bash
-wrangler secret put AUTH_TOKEN --config workers/event-ingest/wrangler.local.jsonc
-```
-
-And set `AUTH_ENABLED=true` in the wrangler config, then redeploy:
-
-```bash
-pnpm deploy:ingest
-```
+Both workers are also rate-limited per IP. To require a token for queries and dashboards too, set `API_TOKEN` on the query worker. See [Configuration](./configuration.md#authentication) and [Cost & abuse protection](../README.md#cost--abuse-protection).
 
 ## Step 5: Redeploying
 
@@ -100,6 +92,7 @@ pnpm deploy:query
 ```bash
 curl -X POST https://icelight-event-ingest.your-subdomain.workers.dev/v1/track \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $ICELIGHT_INGEST_TOKEN" \
   -d '{
     "userId": "test-user",
     "event": "Test Event",
@@ -124,6 +117,10 @@ curl -X POST https://icelight-query-api.your-subdomain.workers.dev/query \
 ```bash
 INGEST_API_URL=https://icelight-event-ingest.your-subdomain.workers.dev pnpm generate-events 30
 ```
+
+It sends `ICELIGHT_INGEST_TOKEN` from `.env` automatically.
+
+This adds to whatever is already in the table. To replace all events with fresh demo data instead, run `pnpm reseed [days]`.
 
 ## Next Steps
 

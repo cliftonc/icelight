@@ -148,7 +148,7 @@ export default function EndpointConfig({ onSdkReady }: EndpointConfigProps) {
         <div className="form-control">
           <label className="label">
             <span className="label-text">Write Key</span>
-            <span className="label-text-alt text-base-content/60">Optional - for auth</span>
+            <span className="label-text-alt text-base-content/60">ICELIGHT_INGEST_TOKEN in .env (not needed on the public demo)</span>
           </label>
           <input
             type="text"

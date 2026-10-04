@@ -117,8 +117,15 @@ export async function listBucketObjects(
  */
 export type EmptyBucketProgressCallback = (deleted: number, total: number) => void;
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
- * Delete a single object using the Cloudflare API
+ * Delete a single object using the Cloudflare API.
+ *
+ * The API allows 1,200 requests per 5 minutes; when rate limited, wait for
+ * the Retry-After period and try again.
  */
 async function deleteObject(
   bucketName: string,
@@ -127,15 +134,23 @@ async function deleteObject(
   accountId: string
 ): Promise<boolean> {
   const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${bucketName}/objects/${encodeURIComponent(key)}`;
-  try {
-    const response = await fetch(url, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${apiToken}` },
-    });
-    return response.ok || response.status === 404;
-  } catch {
-    return false;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${apiToken}` },
+      });
+      if (response.status === 429) {
+        const retryAfter = parseInt(response.headers.get('retry-after') ?? '60', 10);
+        await sleep((Number.isFinite(retryAfter) ? retryAfter : 60) * 1000);
+        continue;
+      }
+      return response.ok || response.status === 404;
+    } catch {
+      return false;
+    }
   }
+  return false;
 }
 
 /**
@@ -151,7 +166,7 @@ async function deleteObjects(
   accountId: string,
   onProgress?: EmptyBucketProgressCallback
 ): Promise<{ deleted: number; failed: number }> {
-  const concurrency = 25;
+  const concurrency = 10;
   let deleted = 0;
   let failed = 0;
   let next = 0;
@@ -211,9 +226,15 @@ export async function emptyBucket(
  * Delete an R2 bucket
  */
 export async function deleteBucket(bucketName: string): Promise<DeletionResult> {
-  const result = await runCommandWithOutputAsync(
+  let result = await runCommandWithOutputAsync(
     `wrangler r2 bucket delete ${bucketName}`
   );
+
+  // Emptying a large bucket can use up the API rate limit (code 971); wait it out
+  for (let attempt = 0; attempt < 5 && !result.success && result.output.includes('971'); attempt++) {
+    await sleep(65000);
+    result = await runCommandWithOutputAsync(`wrangler r2 bucket delete ${bucketName}`);
+  }
 
   if (result.success) {
     return { success: true, notFound: false };

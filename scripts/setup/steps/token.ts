@@ -42,13 +42,19 @@ export function hasApiToken(): boolean {
  */
 export function getTokenRequirements(): string[] {
   return [
-    'An API token is needed for Basin Catalog, Basin SQL and worker secrets.',
-    'Required permissions (API names still use the "Workers R2" prefix):',
-    '  • Account → Workers R2 Storage → Edit',
-    '  • Account → Basin Catalog (Workers R2 Data Catalog) → Edit',
-    '  • Account → Basin SQL (Workers R2 SQL) → Read',
-    '  • Account → Workers Scripts → Read',
+    'icelight needs a Cloudflare API token (saved to .env as ICELIGHT_API_TOKEN).',
     '',
-    'Create a token at: https://dash.cloudflare.com/profile/api-tokens',
+    'Create it at https://dash.cloudflare.com/profile/api-tokens:',
+    '  1. Create Token → Create Custom Token',
+    '  2. Add these Account permissions:',
+    '       Basin Catalog   → Edit   (pipeline sink writes the Iceberg table)',
+    '       Basin SQL       → Read   (query API runs SQL and dashboards)',
+    '       Workers R2 Storage → Edit (read data files; teardown empties the bucket)',
+    '       Workers Scripts → Read   (look up your workers.dev subdomain)',
+    '  3. Account Resources → Include → your account',
+    '  4. Continue to summary → Create Token, then copy the token value',
+    '',
+    'Older dashboards label Basin Catalog / Basin SQL as',
+    '"Workers R2 Data Catalog" / "Workers R2 SQL" — same permissions.',
   ];
 }

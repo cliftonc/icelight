@@ -24,12 +24,14 @@ pnpm build
 
 ## Step 2: Create an API Token
 
-`pnpm launch` asks for a Cloudflare API token and saves it to `.env` as `ICELIGHT_API_TOKEN`. Create one at [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) with:
+`pnpm launch` asks for a Cloudflare API token and saves it to `.env` as `ICELIGHT_API_TOKEN`. Create one at [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) → **Create Token** → **Create Custom Token**, with these **Account** permissions:
 
-- **Account** → Workers R2 Storage → Edit
-- **Account** → Basin Catalog (Workers R2 Data Catalog) → Edit
-- **Account** → Basin SQL (Workers R2 SQL) → Read
-- **Account** → Workers Scripts → Read
+- **Basin Catalog** → Edit
+- **Basin SQL** → Read
+- **Workers R2 Storage** → Edit
+- **Workers Scripts** → Read
+
+Set **Account Resources** to include your account. See [Cloudflare API Token Permissions](./configuration.md#cloudflare-api-token-permissions) for what each permission is used for. Don't use an R2 token from **R2 → Manage API tokens**; it lacks Workers Scripts.
 
 See `templates/.env.example` for the other values `.env` can hold.
 

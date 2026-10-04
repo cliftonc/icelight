@@ -143,15 +143,28 @@ Use `"*"` to allow all origins (not recommended for production).
 
 ## Cloudflare API Token Permissions
 
-Create an API token at [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens) with:
+icelight uses one API token, saved to `.env` as `ICELIGHT_API_TOKEN`. `pnpm launch` prompts for it and also sets it as the query worker's `CF_API_TOKEN` secret.
 
-- **Account** → Workers R2 Storage → Edit
-- **Account** → Basin Catalog (Workers R2 Data Catalog) → Edit
-- **Account** → Basin SQL (Workers R2 SQL) → Read
-- **Account** → Workers Scripts → Read
-- **Account** → Account Analytics → Read (optional, for monitoring)
+To create it:
 
-The API permission groups still use the "Workers R2" names; the dashboard may show the Basin names.
+1. Go to [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) → **Create Token** → **Create Custom Token**
+2. Add these **Account** permissions:
+
+   | Permission | Access | Used for |
+   |------------|--------|----------|
+   | Basin Catalog | Edit | The pipeline sink creates and writes the `analytics.events` Iceberg table |
+   | Basin SQL | Read | The query API's `/query` endpoint and the drizzle-cube semantic layer |
+   | Workers R2 Storage | Edit | Reading Iceberg data files; `pnpm teardown` empties the bucket |
+   | Workers Scripts | Read | Looking up your `workers.dev` subdomain during launch |
+
+3. Under **Account Resources**, choose **Include** → your account
+4. **Continue to summary** → **Create Token**, then copy the token value
+
+Notes:
+
+- Older dashboards, and the API permission group names, call these **Workers R2 Data Catalog** and **Workers R2 SQL**. They're the same permissions.
+- Don't use an R2 token from **R2 → Manage API tokens**. It covers Basin Catalog, Basin SQL and storage, but not **Workers Scripts**.
+- Wrangler creates the pipelines and deploys the workers with your `wrangler login` session, so the token doesn't need Pipelines or Workers Scripts Edit permissions.
 
 ## Custom Domain
 

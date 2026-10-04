@@ -118,59 +118,57 @@ export async function listBucketObjects(
 export type EmptyBucketProgressCallback = (deleted: number, total: number) => void;
 
 /**
- * Delete objects in bulk using Cloudflare API (up to 1000 at a time)
+ * Delete a single object using the Cloudflare API
  */
-async function bulkDeleteObjects(
+async function deleteObject(
+  bucketName: string,
+  key: string,
+  apiToken: string,
+  accountId: string
+): Promise<boolean> {
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${bucketName}/objects/${encodeURIComponent(key)}`;
+  try {
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${apiToken}` },
+    });
+    return response.ok || response.status === 404;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Delete objects using the Cloudflare API.
+ *
+ * The REST API has no bulk delete, so objects are deleted individually
+ * with a bounded number of requests in flight.
+ */
+async function deleteObjects(
   bucketName: string,
   keys: string[],
   apiToken: string,
-  accountId: string
+  accountId: string,
+  onProgress?: EmptyBucketProgressCallback
 ): Promise<{ deleted: number; failed: number }> {
-  // R2 bulk delete supports up to 1000 objects per request
-  const batchSize = 1000;
+  const concurrency = 25;
   let deleted = 0;
   let failed = 0;
+  let next = 0;
 
-  for (let i = 0; i < keys.length; i += batchSize) {
-    const batch = keys.slice(i, i + batchSize);
-    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${bucketName}/objects`;
-
-    try {
-      const response = await fetch(url, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${apiToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ keys: batch }),
-      });
-
-      if (response.ok) {
-        deleted += batch.length;
+  const worker = async () => {
+    while (next < keys.length) {
+      const key = keys[next++];
+      if (await deleteObject(bucketName, key, apiToken, accountId)) {
+        deleted++;
       } else {
-        // Fallback to individual deletion if bulk fails
-        for (const key of batch) {
-          const output = await runQuietAsync(`wrangler r2 object delete "${bucketName}/${key}"`);
-          if (output !== null) {
-            deleted++;
-          } else {
-            failed++;
-          }
-        }
+        failed++;
       }
-    } catch {
-      // Fallback to individual deletion
-      for (const key of batch) {
-        const output = await runQuietAsync(`wrangler r2 object delete "${bucketName}/${key}"`);
-        if (output !== null) {
-          deleted++;
-        } else {
-          failed++;
-        }
-      }
+      onProgress?.(deleted, keys.length);
     }
-  }
+  };
 
+  await Promise.all(Array.from({ length: Math.min(concurrency, keys.length) }, worker));
   return { deleted, failed };
 }
 
@@ -189,20 +187,15 @@ export async function emptyBucket(
     return { success: true, deletedCount: 0, failedCount: 0 };
   }
 
-  // Use bulk delete for efficiency
-  const { deleted, failed } = await bulkDeleteObjects(bucketName, objects, apiToken, accountId);
+  const { deleted, failed } = await deleteObjects(bucketName, objects, apiToken, accountId, onProgress);
 
-  if (onProgress) {
-    onProgress(deleted, objects.length);
-  }
-
-  // If bulk delete didn't work well, objects might still exist - try listing again
+  // Some deletes failed - retry what's left via wrangler
   if (failed > 0) {
     const remaining = await listBucketObjects(bucketName, apiToken, accountId);
     if (remaining.length > 0) {
       // Try individual deletion for remaining objects
       for (const key of remaining) {
-        await runQuietAsync(`wrangler r2 object delete "${bucketName}/${key}"`);
+        await runQuietAsync(`wrangler r2 object delete "${bucketName}/${key}" --remote`);
       }
     }
   }

@@ -50,11 +50,11 @@ export function createEventIngestLocalConfig(projectName: string, streamId: stri
     // Set worker name based on project
     config.name = getEventIngestWorkerName(projectName);
 
-    // Add pipeline binding
+    // Add Basin Pipelines stream binding
     config.pipelines = [
       {
-        pipeline: streamId,
         binding: 'PIPELINE',
+        stream: streamId,
       },
     ];
 

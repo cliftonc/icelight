@@ -13,10 +13,10 @@ export async function createBucket(bucketName: string): Promise<boolean> {
 }
 
 /**
- * Enable Data Catalog for bucket (async for spinner animation)
+ * Enable Basin Catalog for bucket (async for spinner animation)
  */
 export async function enableCatalog(bucketName: string): Promise<boolean> {
-  return runCommandAsync(`wrangler r2 bucket catalog enable ${bucketName}`);
+  return runCommandAsync(`wrangler basin catalog enable ${bucketName}`);
 }
 
 /**
@@ -24,7 +24,7 @@ export async function enableCatalog(bucketName: string): Promise<boolean> {
  */
 export async function createStream(streamName: string): Promise<boolean> {
   const schemaPath = getSchemaPath();
-  const cmd = `wrangler pipelines streams create ${streamName} ` +
+  const cmd = `wrangler basin pipelines streams create ${streamName} ` +
     `--schema-file "${schemaPath}" ` +
     `--http-enabled true ` +
     `--http-auth false`;
@@ -32,15 +32,16 @@ export async function createStream(streamName: string): Promise<boolean> {
 }
 
 /**
- * Create sink for R2 Data Catalog (async for spinner animation)
+ * Create sink for Basin Catalog (Iceberg) (async for spinner animation)
  */
 export async function createSink(sinkName: string, bucketName: string, apiToken: string): Promise<boolean> {
-  const cmd = `wrangler pipelines sinks create ${sinkName} ` +
+  const cmd = `wrangler basin pipelines sinks create ${sinkName} ` +
+    // Basin docs also list `basin-catalog`, but wrangler only accepts `r2-data-catalog` so far
     `--type r2-data-catalog ` +
     `--bucket ${bucketName} ` +
     `--namespace analytics ` +
     `--table events ` +
-    `--roll-interval 60 ` +
+    `--roll-interval 60 ` + // Minimum for Basin Catalog sinks
     `--catalog-token "${apiToken}"`;
   return runCommandAsync(cmd);
 }
@@ -49,7 +50,7 @@ export async function createSink(sinkName: string, bucketName: string, apiToken:
  * Create pipeline connecting stream to sink (async for spinner animation)
  */
 export async function createPipeline(pipelineName: string, sinkName: string, streamName: string): Promise<boolean> {
-  const cmd = `wrangler pipelines create ${pipelineName} ` +
+  const cmd = `wrangler basin pipelines create ${pipelineName} ` +
     `--sql "INSERT INTO ${sinkName} SELECT * FROM ${streamName}"`;
   return runCommandAsync(cmd);
 }

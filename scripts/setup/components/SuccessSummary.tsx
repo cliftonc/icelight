@@ -45,7 +45,7 @@ export function SuccessSummary({
       <Box flexDirection="column" marginTop={1}>
         <Text bold color="white">Resources</Text>
         <Box flexDirection="column" marginLeft={2} marginTop={1}>
-          <Text color="cyan">R2 Bucket: <Text color="white">{config.bucketName}</Text></Text>
+          <Text color="cyan">R2 Bucket (Basin Catalog): <Text color="white">{config.bucketName}</Text></Text>
           <Text color="cyan">Stream: <Text color="white">{config.streamName}</Text></Text>
           {resources.stream.id && (
             <Text color="gray">  ID: {resources.stream.id}</Text>
@@ -64,13 +64,6 @@ export function SuccessSummary({
             <Text>Event Ingest: </Text>
             <Text color={deployedUrls.ingest ? 'cyan' : 'yellow'}>
               {deployedUrls.ingest || '(not deployed)'}
-            </Text>
-          </Box>
-          <Box>
-            <Text color="green">✓ </Text>
-            <Text>DuckDB API:   </Text>
-            <Text color={deployedUrls.duckdb ? 'cyan' : 'yellow'}>
-              {deployedUrls.duckdb || '(not deployed)'}
             </Text>
           </Box>
           <Box>

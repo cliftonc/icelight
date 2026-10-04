@@ -22,7 +22,7 @@ function isNotFoundError(output: string): boolean {
  */
 export async function deletePipeline(pipelineId: string): Promise<DeletionResult> {
   const result = await runCommandWithOutputAsync(
-    `wrangler pipelines delete ${pipelineId} --force`
+    `wrangler basin pipelines delete ${pipelineId} --force`
   );
 
   if (result.success) {
@@ -41,7 +41,7 @@ export async function deletePipeline(pipelineId: string): Promise<DeletionResult
  */
 export async function deleteSink(sinkId: string): Promise<DeletionResult> {
   const result = await runCommandWithOutputAsync(
-    `wrangler pipelines sinks delete ${sinkId} --force`
+    `wrangler basin pipelines sinks delete ${sinkId} --force`
   );
 
   if (result.success) {
@@ -60,7 +60,7 @@ export async function deleteSink(sinkId: string): Promise<DeletionResult> {
  */
 export async function deleteStream(streamId: string): Promise<DeletionResult> {
   const result = await runCommandWithOutputAsync(
-    `wrangler pipelines streams delete ${streamId} --force`
+    `wrangler basin pipelines streams delete ${streamId} --force`
   );
 
   if (result.success) {

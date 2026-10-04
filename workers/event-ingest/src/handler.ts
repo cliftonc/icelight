@@ -5,16 +5,15 @@ import { authMiddleware } from "./auth.js";
 import { processBatch, processSingleEvent } from "./batch.js";
 
 /**
- * Pipeline binding interface
- * This matches the Cloudflare Pipelines binding
+ * Basin Pipelines stream binding interface
+ * Matches Pipeline<T> from "cloudflare:pipelines"
  */
 export interface PipelineBinding {
-  send(messages: unknown[]): Promise<void>;
+  send(records: FlattenedEvent[]): Promise<void>;
 }
 
 export interface IngestEnv {
   PIPELINE?: PipelineBinding;
-  STREAM_HTTP_ENDPOINT?: string; // HTTP endpoint for stream ingestion
   AUTH_ENABLED?: string;
   AUTH_TOKEN?: string;
   ALLOWED_ORIGINS?: string;

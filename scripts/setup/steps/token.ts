@@ -42,11 +42,11 @@ export function hasApiToken(): boolean {
  */
 export function getTokenRequirements(): string[] {
   return [
-    'An API token is needed for Data Catalog and worker secrets.',
-    'Required permissions:',
+    'An API token is needed for Basin Catalog, Basin SQL and worker secrets.',
+    'Required permissions (API names still use the "Workers R2" prefix):',
     '  • Account → Workers R2 Storage → Edit',
-    '  • Account → Workers R2 Data Catalog → Edit',
-    '  • Account → Workers R2 SQL → Read',
+    '  • Account → Basin Catalog (Workers R2 Data Catalog) → Edit',
+    '  • Account → Basin SQL (Workers R2 SQL) → Read',
     '  • Account → Workers Scripts → Read',
     '',
     'Create a token at: https://dash.cloudflare.com/profile/api-tokens',

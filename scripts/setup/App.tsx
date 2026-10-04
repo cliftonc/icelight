@@ -10,6 +10,7 @@ import { WelcomeScreen } from './components/WelcomeScreen.js';
 import { ConfigPrompts } from './components/ConfigPrompts.js';
 import { InfrastructurePhase } from './components/InfrastructurePhase.js';
 import { DeploymentPhase } from './components/DeploymentPhase.js';
+import { SeedPhase } from './components/SeedPhase.js';
 import { SuccessSummary } from './components/SuccessSummary.js';
 import { ErrorDisplay } from './components/ErrorDisplay.js';
 
@@ -18,6 +19,7 @@ export type SetupPhase =
   | 'config'
   | 'infrastructure'
   | 'deploy'
+  | 'seed'
   | 'summary'
   | 'error';
 
@@ -113,6 +115,14 @@ export function SetupApp(): React.ReactElement {
     (deployedUrls: DeployedUrls) => {
       setContext((prev) => ({ ...prev, deployedUrls }));
       addCompletedPhase('deploy', 'Workers deployed');
+      setPhase('seed');
+    },
+    [addCompletedPhase]
+  );
+
+  const handleSeedComplete = useCallback(
+    (message: string) => {
+      addCompletedPhase('seed', message);
       setPhase('summary');
     },
     [addCompletedPhase]
@@ -173,9 +183,15 @@ export function SetupApp(): React.ReactElement {
           apiToken={context.apiToken}
           resources={context.resources}
           warehouseName={context.warehouseName}
-          catalogUri={context.catalogUri}
           onComplete={handleDeploymentComplete}
           onError={handleError}
+        />
+      )}
+
+      {phase === 'seed' && (
+        <SeedPhase
+          ingestUrl={context.deployedUrls.ingest}
+          onComplete={handleSeedComplete}
         />
       )}
 

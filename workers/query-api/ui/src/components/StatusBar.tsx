@@ -1,13 +1,26 @@
 interface StatusBarProps {
   rowCount: number | null;
   executionTime: number | null;
+  bytesScanned?: number;
   error: string | null;
   onExportCsv?: () => void;
+}
+
+function formatBytes(bytes: number): string {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
 export default function StatusBar({
   rowCount,
   executionTime,
+  bytesScanned,
   error,
   onExportCsv,
 }: StatusBarProps) {
@@ -43,6 +56,9 @@ export default function StatusBar({
           Results: {rowCount} row{rowCount !== 1 ? 's' : ''}
           {executionTime !== null && (
             <span className="ml-2">({executionTime}ms)</span>
+          )}
+          {bytesScanned !== undefined && (
+            <span className="ml-2">· {formatBytes(bytesScanned)} scanned</span>
           )}
         </div>
         {onExportCsv && (

@@ -3,7 +3,7 @@
  */
 
 import type { Config, ExistingResources } from '../core/types.js';
-import { runQuietAsync } from '../core/wrangler.js';
+import { runQuietAsync, findBasinResourceId } from '../core/wrangler.js';
 
 /**
  * Check status of all existing Cloudflare resources (async for spinner animation)
@@ -25,59 +25,21 @@ export async function checkExistingResources(config: Config): Promise<ExistingRe
     resources.bucket = true;
 
     // Check if catalog is enabled
-    const catalogOutput = await runQuietAsync(`wrangler r2 bucket catalog get ${config.bucketName}`);
+    const catalogOutput = await runQuietAsync(`wrangler basin catalog get ${config.bucketName}`);
     if (catalogOutput && (catalogOutput.includes('active') || catalogOutput.includes('enabled'))) {
       resources.catalogEnabled = true;
     }
   }
 
-  // Check streams
-  const streamsOutput = await runQuietAsync('wrangler pipelines streams list');
-  if (streamsOutput) {
-    const lines = streamsOutput.split('\n');
-    for (const line of lines) {
-      if (line.includes(config.streamName)) {
-        resources.stream.exists = true;
-        const idMatch = line.match(/([a-f0-9]{32})/i);
-        if (idMatch) {
-          resources.stream.id = idMatch[1];
-        }
-        break;
-      }
-    }
-  }
-
-  // Check sinks
-  const sinksOutput = await runQuietAsync('wrangler pipelines sinks list');
-  if (sinksOutput) {
-    const lines = sinksOutput.split('\n');
-    for (const line of lines) {
-      if (line.includes(config.sinkName)) {
-        resources.sink.exists = true;
-        const idMatch = line.match(/([a-f0-9]{32})/i);
-        if (idMatch) {
-          resources.sink.id = idMatch[1];
-        }
-        break;
-      }
-    }
-  }
-
-  // Check pipelines
-  const pipelinesOutput = await runQuietAsync('wrangler pipelines list');
-  if (pipelinesOutput) {
-    const lines = pipelinesOutput.split('\n');
-    for (const line of lines) {
-      if (line.includes(config.pipelineName)) {
-        resources.pipeline.exists = true;
-        const idMatch = line.match(/([a-f0-9]{32})/i);
-        if (idMatch) {
-          resources.pipeline.id = idMatch[1];
-        }
-        break;
-      }
-    }
-  }
+  // Check Basin Pipelines streams, sinks and pipelines
+  const [streamId, sinkId, pipelineId] = await Promise.all([
+    findBasinResourceId('stream', config.streamName),
+    findBasinResourceId('sink', config.sinkName),
+    findBasinResourceId('pipeline', config.pipelineName),
+  ]);
+  resources.stream = { exists: streamId !== null, id: streamId };
+  resources.sink = { exists: sinkId !== null, id: sinkId };
+  resources.pipeline = { exists: pipelineId !== null, id: pipelineId };
 
   // Check KV namespaces (output is JSON array)
   const kvOutput = await runQuietAsync('wrangler kv namespace list');
@@ -182,7 +144,7 @@ export function getResourcesNeeded(resources: ExistingResources): {
  * Get catalog info (warehouse name and URI) for a bucket (async for spinner animation)
  */
 export async function getCatalogInfo(bucketName: string): Promise<{ warehouseName: string; catalogUri: string } | null> {
-  const catalogOutput = await runQuietAsync(`wrangler r2 bucket catalog get ${bucketName}`);
+  const catalogOutput = await runQuietAsync(`wrangler basin catalog get ${bucketName}`);
   if (!catalogOutput) {
     return null;
   }

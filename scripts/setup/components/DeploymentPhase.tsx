@@ -14,13 +14,6 @@ import {
   checkEventIngestDeployedAsync,
 } from '../steps/event-ingest.js';
 import {
-  createDuckDbApiLocalConfig,
-  downloadExtensions,
-  deployDuckDbApi,
-  setDuckDbApiSecrets,
-  checkDuckDbApiDeployedAsync,
-} from '../steps/duckdb-api.js';
-import {
   createQueryApiLocalConfig,
   runMigrations,
   deployQueryApi,
@@ -36,12 +29,12 @@ interface DeploymentPhaseProps {
   apiToken: string;
   resources: ExistingResources;
   warehouseName: string;
-  catalogUri: string;
   onComplete: (deployedUrls: DeployedUrls) => void;
   onError: (error: Error) => void;
 }
 
-type WorkerType = 'event-ingest' | 'duckdb-api' | 'query-api';
+type WorkerType = 'event-ingest' | 'query-api';
+const WORKERS: WorkerType[] = ['event-ingest', 'query-api'];
 type WorkerStatus = 'pending' | 'checking' | 'prompt' | 'deploying' | 'success' | 'skipped' | 'error';
 
 interface WorkerState {
@@ -57,14 +50,12 @@ export function DeploymentPhase({
   apiToken,
   resources,
   warehouseName,
-  catalogUri,
   onComplete,
   onError,
 }: DeploymentPhaseProps): React.ReactElement {
   const [currentWorker, setCurrentWorker] = useState<WorkerType | null>(null);
   const [workerStates, setWorkerStates] = useState<Record<WorkerType, WorkerState>>({
     'event-ingest': { status: 'pending' },
-    'duckdb-api': { status: 'pending' },
     'query-api': { status: 'pending' },
   });
   const [deployedUrls, setDeployedUrls] = useState<DeployedUrls>({});
@@ -151,53 +142,6 @@ export function DeploymentPhase({
     return true;
   }, [projectName, cacheSubdomain, updateWorkerState]);
 
-  // Deploy duckdb-api worker - uses refs for objects to prevent recreation
-  const deployDuckDbApiWorker = useCallback(async (skipCheck = false) => {
-    updateWorkerState('duckdb-api', { status: 'checking' });
-
-    // Check skip conditions
-    if (!warehouseName || !catalogUri) {
-      updateWorkerState('duckdb-api', { status: 'skipped', message: 'Catalog info not available' });
-      return true;
-    }
-
-    // Check if already deployed
-    if (!skipCheck) {
-      const status = await checkDuckDbApiDeployedAsync(projectName, authInfoRef.current.subdomain);
-      if (status.deployed && status.url) {
-        setDeployedUrls((prev) => ({ ...prev, duckdb: status.url! }));
-        cacheSubdomain(status.url);
-        setPromptWorker('duckdb-api');
-        setShowPrompt(true);
-        return false;
-      }
-    }
-
-    // Deploy
-    updateWorkerState('duckdb-api', { status: 'deploying' });
-    const configSuccess = createDuckDbApiLocalConfig(projectName, warehouseName, catalogUri);
-    if (!configSuccess) {
-      updateWorkerState('duckdb-api', { status: 'error', message: 'Failed to create config' });
-      return true;
-    }
-
-    await downloadExtensions();
-    const result = await deployDuckDbApi();
-    if (result.success) {
-      updateWorkerState('duckdb-api', { status: 'success', url: result.url });
-      setDeployedUrls((prev) => ({ ...prev, duckdb: result.url }));
-      cacheSubdomain(result.url);
-
-      // Set secrets
-      if (apiToken) {
-        await setDuckDbApiSecrets(apiToken);
-      }
-    } else {
-      updateWorkerState('duckdb-api', { status: 'error', message: result.error });
-    }
-    return true;
-  }, [projectName, warehouseName, catalogUri, apiToken, cacheSubdomain, updateWorkerState]);
-
   // Deploy query-api worker - uses refs for objects to prevent recreation
   const deployQueryApiWorker = useCallback(async (skipCheck = false) => {
     updateWorkerState('query-api', { status: 'checking' });
@@ -210,6 +154,10 @@ export function DeploymentPhase({
     // Check skip conditions
     if (!currentAuthInfo.accountId) {
       updateWorkerState('query-api', { status: 'skipped', message: 'Account ID not available' });
+      return true;
+    }
+    if (!warehouseName) {
+      updateWorkerState('query-api', { status: 'skipped', message: 'Basin Catalog warehouse not available' });
       return true;
     }
 
@@ -227,7 +175,7 @@ export function DeploymentPhase({
 
     // Deploy
     updateWorkerState('query-api', { status: 'deploying' });
-    const configSuccess = createQueryApiLocalConfig(projectName, currentConfig.bucketName, {
+    const configSuccess = createQueryApiLocalConfig(projectName, warehouseName, {
       kvCacheId: currentResources.kvCache.id,
       kvCachePreviewId: currentResources.kvCache.previewId,
       d1DatabaseId: currentResources.d1Database.id,
@@ -257,7 +205,7 @@ export function DeploymentPhase({
       updateWorkerState('query-api', { status: 'error', message: result.error });
     }
     return true;
-  }, [projectName, apiToken, cacheSubdomain, updateWorkerState]);
+  }, [projectName, warehouseName, apiToken, cacheSubdomain, updateWorkerState]);
 
   // Handle prompt response
   const handlePromptResponse = useCallback(
@@ -275,8 +223,6 @@ export function DeploymentPhase({
         // Redeploy
         if (promptWorker === 'event-ingest') {
           await deployEventIngestWorker(true);
-        } else if (promptWorker === 'duckdb-api') {
-          await deployDuckDbApiWorker(true);
         } else if (promptWorker === 'query-api') {
           await deployQueryApiWorker(true);
         }
@@ -286,10 +232,9 @@ export function DeploymentPhase({
       }
 
       // Move to next worker
-      const workers: WorkerType[] = ['event-ingest', 'duckdb-api', 'query-api'];
-      const currentIndex = workers.indexOf(promptWorker);
-      if (currentIndex < workers.length - 1) {
-        setCurrentWorker(workers[currentIndex + 1]);
+      const currentIndex = WORKERS.indexOf(promptWorker);
+      if (currentIndex < WORKERS.length - 1) {
+        setCurrentWorker(WORKERS[currentIndex + 1]);
       } else {
         setAllDone(true);
       }
@@ -297,7 +242,7 @@ export function DeploymentPhase({
       // Clear flag after state updates are queued
       handlingPromptRef.current = false;
     },
-    [promptWorker, deployEventIngestWorker, deployDuckDbApiWorker, deployQueryApiWorker, updateWorkerState]
+    [promptWorker, deployEventIngestWorker, deployQueryApiWorker, updateWorkerState]
   );
 
   // Start deployment sequence
@@ -318,18 +263,15 @@ export function DeploymentPhase({
 
         if (currentWorker === 'event-ingest') {
           complete = await deployEventIngestWorker();
-        } else if (currentWorker === 'duckdb-api') {
-          complete = await deployDuckDbApiWorker();
         } else if (currentWorker === 'query-api') {
           complete = await deployQueryApiWorker();
         }
 
         if (complete) {
           // Move to next worker
-          const workers: WorkerType[] = ['event-ingest', 'duckdb-api', 'query-api'];
-          const currentIndex = workers.indexOf(currentWorker);
-          if (currentIndex < workers.length - 1) {
-            setCurrentWorker(workers[currentIndex + 1]);
+          const currentIndex = WORKERS.indexOf(currentWorker);
+          if (currentIndex < WORKERS.length - 1) {
+            setCurrentWorker(WORKERS[currentIndex + 1]);
           } else {
             setAllDone(true);
           }
@@ -340,7 +282,7 @@ export function DeploymentPhase({
     };
 
     processWorker();
-  }, [currentWorker, showPrompt, deployEventIngestWorker, deployDuckDbApiWorker, deployQueryApiWorker, onError]);
+  }, [currentWorker, showPrompt, deployEventIngestWorker, deployQueryApiWorker, onError]);
 
   // Complete when all done
   useEffect(() => {
@@ -353,8 +295,6 @@ export function DeploymentPhase({
     switch (worker) {
       case 'event-ingest':
         return 'Event Ingest Worker';
-      case 'duckdb-api':
-        return 'DuckDB API Worker';
       case 'query-api':
         return 'Query API Worker';
     }
@@ -412,7 +352,6 @@ export function DeploymentPhase({
       </Box>
 
       {renderWorkerStatus('event-ingest')}
-      {renderWorkerStatus('duckdb-api')}
       {renderWorkerStatus('query-api')}
 
       {showPrompt && promptWorker && (

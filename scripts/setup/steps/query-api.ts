@@ -16,6 +16,7 @@ import {
   constructWorkerUrl,
 } from '../core/wrangler.js';
 import { promptRedeploy } from '../core/prompts.js';
+import { getEventIngestWorkerName } from './event-ingest.js';
 
 /**
  * Get worker name based on project name
@@ -61,6 +62,15 @@ export function createQueryApiLocalConfig(
     const vars = (config.vars as Record<string, unknown>) || {};
     vars.WAREHOUSE_NAME = warehouseName;
     config.vars = vars;
+
+    // Point the ingest service binding at this project's ingest worker
+    config.services = [
+      {
+        binding: 'INGEST_API',
+        service: getEventIngestWorkerName(projectName),
+        remote: true,
+      },
+    ];
 
     // Add KV namespace binding if IDs are provided
     if (options.kvCacheId) {
@@ -109,7 +119,7 @@ export async function runMigrations(databaseName: string): Promise<{ success: bo
     return { success: false, applied };
   }
 
-  const migrationFiles = ['0000_create_dashboards.sql', '0001_seed_default.sql'];
+  const migrationFiles = ['0000_create_dashboards.sql'];
 
   for (const file of migrationFiles) {
     const migrationPath = join(migrationsPath, file);

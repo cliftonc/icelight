@@ -2,7 +2,7 @@
   "name": "query-api",
   "version": "0.1.0",
   "private": true,
-  "description": "Cloudflare Worker for R2 SQL query API",
+  "description": "Cloudflare Worker for Basin SQL query API, semantic layer and UI",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
@@ -16,17 +16,15 @@
   },
   "dependencies": {
     "@icelight/core": "workspace:*",
-    "@icelight/duckdb-http-adapter": "workspace:*",
     "@icelight/sql-guard": "workspace:*",
-    "@leonardovida-md/drizzle-neo-duckdb": "^1.2.2",
-    "drizzle-cube": "^0.3.21",
-    "drizzle-orm": "^0.44.0",
+    "drizzle-cube": "^0.10.1",
+    "drizzle-orm": "^0.45.3",
     "hono": "^4.6.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240117.0",
-    "drizzle-kit": "^0.30.0",
+    "@cloudflare/workers-types": "^5.20261004.1",
+    "drizzle-kit": "^0.31.11",
     "typescript": "^5.3.3",
-    "wrangler": "^4.59.2"
+    "wrangler": "^4.147.0"
   }
 }

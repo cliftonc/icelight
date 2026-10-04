@@ -34,14 +34,17 @@ export function getApiToken(): string {
 
 /**
  * Get worker names derived from project name
+ *
+ * Includes the legacy DuckDB worker so deployments created before the
+ * move to Basin SQL are fully cleaned up.
  */
 export function getWorkerNamesList(projectName: string): string[] {
   const names = getWorkerNames(projectName);
-  return [names.eventIngest, names.duckdbApi, names.queryApi];
+  return [names.eventIngest, `${projectName}-duckdb-api`, names.queryApi];
 }
 
 /**
- * Get container names derived from project name
+ * Get legacy DuckDB container names derived from project name
  */
 export function getContainerNamesList(projectName: string): string[] {
   return [`${projectName}-duckdb-api-duckdbcontainer`];
@@ -54,7 +57,6 @@ export function getLocalConfigPaths(): LocalConfigPaths {
   const workersPath = getWorkersPath();
   return {
     eventIngest: join(workersPath, 'event-ingest', 'wrangler.local.jsonc'),
-    duckdbApi: join(workersPath, 'duckdb-api', 'wrangler.local.jsonc'),
     queryApi: join(workersPath, 'query-api', 'wrangler.local.jsonc'),
   };
 }
@@ -64,7 +66,7 @@ export function getLocalConfigPaths(): LocalConfigPaths {
  */
 export function getLocalConfigPathsList(): string[] {
   const paths = getLocalConfigPaths();
-  return [paths.eventIngest, paths.duckdbApi, paths.queryApi];
+  return [paths.eventIngest, paths.queryApi];
 }
 
 /**

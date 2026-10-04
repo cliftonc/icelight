@@ -1,23 +1,14 @@
-// Polyfill for process.env - required by @leonardovida-md/drizzle-neo-duckdb
-// which uses process.env for debug logging
-declare const globalThis: { process?: { env: Record<string, string | undefined> } };
-if (typeof globalThis.process === 'undefined') {
-  globalThis.process = { env: {} };
-}
-
 import { Hono, Context } from 'hono';
 import { cors } from 'hono/cors';
 import { bearerAuth } from 'hono/bearer-auth';
-import { sql } from 'drizzle-orm';
-import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
-import { executeQuery, listTables, describeTable, type R2SqlConfig } from './sql-proxy.js';
+import { executeQuery, listTables, describeTable, type BasinSqlConfig, type BasinSqlMetrics } from './basin-sql.js';
+import { createBasinDrizzle } from './basin-drizzle.js';
 import { formatResult, type OutputFormat } from './formatter.js';
 import { validateSql } from '@icelight/sql-guard';
-import { HttpDuckDBConnection } from '@icelight/duckdb-http-adapter';
 import { events } from './schema/events.js';
 import { createCubeApp } from 'drizzle-cube/adapters/hono';
 import { allCubes } from './cubes/events.js';
-import type { Cube, CacheConfig, CacheProvider } from 'drizzle-cube/server';
+import { SemanticLayerCompiler, type Cube, type CacheConfig, type CacheProvider } from 'drizzle-cube/server';
 
 /**
  * Factory function to create a cache provider from KV binding
@@ -27,13 +18,9 @@ export type CacheProviderFactory = (kv: KVNamespace) => CacheProvider;
 export interface QueryEnv {
   CF_ACCOUNT_ID: string;
   CF_API_TOKEN: string;
-  WAREHOUSE_NAME: string;
+  WAREHOUSE_NAME: string; // Basin Catalog warehouse: <account-id>_<bucket-name>
   API_TOKEN?: string; // Optional: require API token for query requests
   ALLOWED_ORIGINS?: string;
-  // DuckDB API configuration - use either Service Binding OR URL
-  DUCKDB_API?: Fetcher; // Service Binding to DuckDB API worker (preferred)
-  DUCKDB_API_URL?: string; // URL to the DuckDB API worker (fallback)
-  DUCKDB_API_TOKEN?: string; // Optional: Bearer token for DuckDB API
   // Ingest API configuration (for proxying /v1/* routes)
   INGEST_API?: Fetcher; // Service Binding to ingest worker (preferred)
   INGEST_API_URL?: string; // URL to the event ingest worker (fallback)
@@ -55,6 +42,7 @@ export interface QueryResponse {
     columns?: Array<{ name: string; type: string }>;
     rowCount?: number;
     executionTime?: number;
+    metrics?: BasinSqlMetrics;
   };
   error?: string;
 }
@@ -86,9 +74,9 @@ export interface QueryAppOptions {
 }
 
 /**
- * Get R2 SQL config from environment
+ * Get Basin SQL config from environment
  */
-function getR2Config(env: QueryEnv): R2SqlConfig {
+function getBasinConfig(env: QueryEnv): BasinSqlConfig {
   return {
     accountId: env.CF_ACCOUNT_ID,
     apiToken: env.CF_API_TOKEN,
@@ -140,16 +128,6 @@ export function createQueryApp(options: QueryAppOptions = {}) {
   // Describe a table
   app.get('/tables/:namespace/:table', async (c) => {
     return handleDescribeTable(c);
-  });
-
-  // Execute DuckDB query (via HTTP adapter)
-  app.post('/duckdb', async (c) => {
-    return handleDuckDbQuery(c);
-  });
-
-  // DuckDB health check proxy
-  app.get('/duckdb/_health', async (c) => {
-    return handleDuckDbHealth(c);
   });
 
   // Proxy /v1/* routes to the ingest API
@@ -210,7 +188,7 @@ async function handleQuery(c: QueryContext) {
   // Validate SQL for security
   const validation = validateSql(body.sql, {
     selectOnly: true,
-    maxQueryLength: 10000,
+    maxQueryLength: 50000,
     requireLimitForNonAggregated: true,
     maxLimit: 10000,
   });
@@ -221,7 +199,7 @@ async function handleQuery(c: QueryContext) {
     );
   }
 
-  const config = getR2Config(c.env);
+  const config = getBasinConfig(c.env);
   const result = await executeQuery(body.sql, config);
 
   const format = body.format || 'json';
@@ -247,7 +225,7 @@ async function handleListTables(c: QueryContext) {
   }
 
   const namespace = c.req.param('namespace');
-  const config = getR2Config(c.env);
+  const config = getBasinConfig(c.env);
   const result = await listTables(namespace, config);
 
   return c.json(result satisfies QueryResponse, result.success ? 200 : 400);
@@ -266,159 +244,10 @@ async function handleDescribeTable(c: QueryContext) {
 
   const namespace = c.req.param('namespace');
   const table = c.req.param('table');
-  const config = getR2Config(c.env);
+  const config = getBasinConfig(c.env);
   const result = await describeTable(namespace, table, config);
 
   return c.json(result satisfies QueryResponse, result.success ? 200 : 400);
-}
-
-/**
- * Handle DuckDB query request (via Drizzle ORM + HTTP adapter)
- */
-async function handleDuckDbQuery(c: QueryContext) {
-  // Check if DuckDB API is configured (Service Binding or URL)
-  if (!c.env.DUCKDB_API && !c.env.DUCKDB_API_URL) {
-    return c.json(
-      { success: false, error: 'DuckDB API not configured: DUCKDB_API (binding) or DUCKDB_API_URL is required' } satisfies QueryResponse,
-      500
-    );
-  }
-
-  let body: QueryRequest;
-  try {
-    body = await c.req.json<QueryRequest>();
-  } catch {
-    return c.json(
-      { success: false, error: 'Invalid JSON body' } satisfies QueryResponse,
-      400
-    );
-  }
-
-  if (!body.sql || typeof body.sql !== 'string') {
-    return c.json(
-      { success: false, error: 'Missing or invalid sql field' } satisfies QueryResponse,
-      400
-    );
-  }
-
-  // Validate SQL for security (use higher limit for DuckDB complex queries)
-  const validation = validateSql(body.sql, {
-    selectOnly: true,
-    maxQueryLength: 50000,
-    requireLimitForNonAggregated: true,
-    maxLimit: 10000,
-  });
-  if (!validation.valid) {
-    return c.json(
-      { success: false, error: `SQL validation failed: ${validation.errors.join('; ')}` } satisfies QueryResponse,
-      400
-    );
-  }
-
-  const startTime = Date.now();
-
-  try {
-    // Create connection to DuckDB API via HTTP adapter
-    // Use Service Binding if available (preferred), otherwise use URL
-    const useServiceBinding = !!c.env.DUCKDB_API;
-    const connection = new HttpDuckDBConnection({
-      // Service bindings need a valid URL (host is ignored, only path matters)
-      // External fetch needs the actual worker URL
-      endpoint: useServiceBinding ? 'https://duckdb-api' : (c.env.DUCKDB_API_URL as string),
-      token: c.env.DUCKDB_API_TOKEN,
-      timeout: 60000, // 60 seconds for cold starts
-      // If Service Binding is configured, use it for fetch
-      fetch: useServiceBinding ? c.env.DUCKDB_API!.fetch.bind(c.env.DUCKDB_API) : undefined,
-    });
-
-    // Create Drizzle instance with the HTTP connection
-    // The HTTP adapter implements the same interface as @duckdb/node-api connection
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const db = await drizzle(connection as any, { schema: { events } });
-
-    // Execute raw SQL query via Drizzle
-    const result = await db.execute(sql.raw(body.sql));
-
-    // Result is an array of row objects
-    const data = result as Record<string, unknown>[];
-    const columns = data.length > 0 ? Object.keys(data[0]) : [];
-
-    const executionTime = Date.now() - startTime;
-
-    const response: QueryResponse = {
-      success: true,
-      data,
-      meta: {
-        columns: columns.map((name: string) => ({ name, type: 'unknown' })),
-        rowCount: data.length,
-        executionTime,
-      },
-    };
-
-    // Format output
-    const format = body.format || 'json';
-    const formatted = formatResult(response, format);
-
-    return new Response(formatted.body, {
-      status: 200,
-      headers: {
-        'Content-Type': formatted.contentType,
-      },
-    });
-  } catch (error) {
-    const executionTime = Date.now() - startTime;
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    return c.json(
-      {
-        success: false,
-        error: errorMessage,
-        meta: { executionTime },
-      } satisfies QueryResponse,
-      400
-    );
-  }
-}
-
-/**
- * Handle DuckDB health check proxy request
- * Proxies to the DuckDB API's /_health endpoint
- */
-async function handleDuckDbHealth(c: QueryContext) {
-  if (!c.env.DUCKDB_API && !c.env.DUCKDB_API_URL) {
-    return c.json({
-      status: 'error',
-      service: 'icelight-duckdb-api',
-      error: 'DuckDB API not configured',
-      container: null,
-      timestamp: new Date().toISOString(),
-    });
-  }
-
-  const useServiceBinding = !!c.env.DUCKDB_API;
-  const targetUrl = useServiceBinding
-    ? 'https://duckdb-api/_health'
-    : new URL('/_health', c.env.DUCKDB_API_URL).toString();
-
-  const fetchFn = useServiceBinding
-    ? c.env.DUCKDB_API!.fetch.bind(c.env.DUCKDB_API)
-    : fetch;
-
-  try {
-    const response = await fetchFn(targetUrl, { method: 'GET' });
-    return new Response(response.body, {
-      status: response.status,
-      headers: response.headers,
-    });
-  } catch (error) {
-    return c.json({
-      status: 'error',
-      service: 'icelight-duckdb-api',
-      error: error instanceof Error ? error.message : String(error),
-      container: null,
-      timestamp: new Date().toISOString(),
-    });
-  }
 }
 
 /**
@@ -481,37 +310,30 @@ async function handleIngestProxy(c: QueryContext) {
 }
 
 /**
- * Handle cube API request (via drizzle-cube)
+ * Handle cube API request (via drizzle-cube on Basin SQL)
  */
 async function handleCubeRequest(c: QueryContext, cubes: Cube[], cacheConfig?: CacheConfig) {
-  // Check if DuckDB API is configured (Service Binding or URL)
-  if (!c.env.DUCKDB_API && !c.env.DUCKDB_API_URL) {
-    return c.json({ error: 'DuckDB API not configured' }, 500);
+  if (!c.env.CF_ACCOUNT_ID || !c.env.CF_API_TOKEN || !c.env.WAREHOUSE_NAME) {
+    return c.json({ error: 'Missing required configuration: CF_ACCOUNT_ID, CF_API_TOKEN, WAREHOUSE_NAME' }, 500);
   }
 
-  // Create connection to DuckDB API via HTTP adapter
-  const useServiceBinding = !!c.env.DUCKDB_API;
-  const connection = new HttpDuckDBConnection({
-    endpoint: useServiceBinding ? 'https://duckdb-api' : (c.env.DUCKDB_API_URL as string),
-    token: c.env.DUCKDB_API_TOKEN,
-    timeout: 60000,
-    fetch: useServiceBinding ? c.env.DUCKDB_API!.fetch.bind(c.env.DUCKDB_API) : undefined,
-  });
+  const schema = { events };
+  const db = createBasinDrizzle(getBasinConfig(c.env), schema);
 
-  // Create Drizzle instance with the HTTP connection
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = await drizzle(connection as any, { schema: { events } });
-
-  // Create the cube app with drizzle-cube
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cubeApp = createCubeApp({
-    cubes: cubes as any,
+  // Basin SQL is close to the Postgres dialect, so use drizzle-cube's postgres adapter
+  const semanticLayer = new SemanticLayerCompiler({
     drizzle: db,
-    schema: { events },
-    extractSecurityContext: async () => ({}),
-    // Cast needed: hono adapter types don't include 'duckdb' yet (drizzle-cube bug)
-    engineType: 'duckdb' as 'postgres',
+    schema,
+    engineType: 'postgres',
     cache: cacheConfig,
+  });
+  for (const cube of cubes) {
+    semanticLayer.registerCube(cube);
+  }
+
+  const cubeApp = createCubeApp({
+    semanticLayer,
+    extractSecurityContext: async () => ({}),
   });
 
   // Forward request to cube app

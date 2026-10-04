@@ -79,6 +79,5 @@ export interface ContainerNames {
  */
 export interface LocalConfigPaths {
   eventIngest: string;
-  duckdbApi: string;
   queryApi: string;
 }

@@ -310,3 +310,49 @@ ${JSON.stringify(config, null, 2)}
 `;
   writeFileSync(localPath, localContent);
 }
+
+/**
+ * Basin Pipelines resource kinds and their wrangler list commands
+ */
+export type BasinResourceKind = 'stream' | 'sink' | 'pipeline';
+
+const basinListCommands: Record<BasinResourceKind, string> = {
+  stream: 'wrangler basin pipelines streams list --json',
+  sink: 'wrangler basin pipelines sinks list --json',
+  pipeline: 'wrangler basin pipelines list --json',
+};
+
+/**
+ * Parse `wrangler basin pipelines ... list --json` output into id/name pairs.
+ *
+ * Some list commands print a JavaScript object literal instead of strict JSON,
+ * so fall back to extracting id/name pairs with a regex.
+ */
+export function parseBasinList(output: string): Array<{ id: string; name: string }> {
+  const start = output.indexOf('[');
+  const body = start === -1 ? output : output.slice(start);
+
+  try {
+    const items = JSON.parse(body) as Array<{ id: string; name: string }>;
+    return items.map(({ id, name }) => ({ id, name }));
+  } catch {
+    const items: Array<{ id: string; name: string }> = [];
+    const pattern = /id:\s*'([a-f0-9]{32})',\s*name:\s*'([^']+)'/gi;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(body)) !== null) {
+      items.push({ id: match[1], name: match[2] });
+    }
+    return items;
+  }
+}
+
+/**
+ * Find the ID of a Basin Pipelines stream, sink or pipeline by name
+ */
+export async function findBasinResourceId(kind: BasinResourceKind, name: string): Promise<string | null> {
+  const output = await runQuietAsync(basinListCommands[kind]);
+  if (!output) {
+    return null;
+  }
+  return parseBasinList(output).find((item) => item.name === name)?.id ?? null;
+}

@@ -33,6 +33,7 @@ export {
   runQuietAsync,
   runCommandAsync,
   runCommandWithOutputAsync,
+  findBasinResourceId,
 } from '../../setup/core/wrangler.js';
 
 // UI utilities (from setup core)

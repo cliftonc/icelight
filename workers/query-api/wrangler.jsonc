@@ -2,13 +2,8 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "icelight-query-api",
   "main": "src/index.ts",
-  "compatibility_date": "2024-01-01",
+  "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
-
-  // Alias native DuckDB to shim - we use HTTP adapter instead
-  "alias": {
-    "@duckdb/node-api": "../../packages/duckdb-http-adapter/dist/node-api-shim.js"
-  },
 
   // Static assets for the query explorer UI
   "assets": {
@@ -19,33 +14,25 @@
   },
 
   // Environment variables
-  // WAREHOUSE_NAME: Set in wrangler.local.jsonc after running pnpm launch
+  // WAREHOUSE_NAME: Basin Catalog warehouse (<account-id>_<bucket>), set in
+  // wrangler.local.jsonc by pnpm launch
   //
   // Secrets (set via wrangler secret put):
   // - CF_ACCOUNT_ID: Your Cloudflare account ID
-  // - CF_API_TOKEN: API token with R2 SQL permissions
+  // - CF_API_TOKEN: API token with Basin SQL Read + Basin Catalog + R2 Storage permissions
   // - API_TOKEN (optional): Bearer token for query API auth
   //
-  // Worker-to-worker communication (choose ONE method per worker):
+  // Ingest worker communication (choose ONE method):
   //
-  // Option 1 - Service Bindings (RECOMMENDED):
-  // "services": [
-  //   { "binding": "DUCKDB_API", "service": "icelight-duckdb-api" },
-  //   { "binding": "INGEST_API", "service": "icelight-event-ingest" }
-  // ]
+  // Option 1 - Service Binding (RECOMMENDED):
+  // "services": [{ "binding": "INGEST_API", "service": "icelight-event-ingest" }]
   //
   // Option 2 - URL-based (may have restrictions on *.workers.dev domains):
-  // - DUCKDB_API_URL: URL to the DuckDB API worker
   // - INGEST_API_URL: URL to the event ingest worker
   "vars": {},
 
   // Service Bindings for worker-to-worker communication (preferred over URLs)
   "services": [
-    {
-      "binding": "DUCKDB_API",
-      "service": "icelight-duckdb-api",
-      "remote": true
-    },
     {
       "binding": "INGEST_API",
       "service": "icelight-event-ingest",

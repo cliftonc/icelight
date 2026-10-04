@@ -42,7 +42,6 @@ export interface ExistingResources {
  */
 export interface DeployedUrls {
   ingest?: string;
-  duckdb?: string;
   query?: string;
 }
 

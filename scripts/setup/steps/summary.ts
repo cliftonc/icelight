@@ -17,7 +17,7 @@ export function getResourceSummary(config: Config, resources: ExistingResources)
   lines.push('');
 
   // R2 Bucket
-  lines.push(`  ${c.accent('R2 Bucket:')} ${config.bucketName}`);
+  lines.push(`  ${c.accent('R2 Bucket (Basin Catalog):')} ${config.bucketName}`);
 
   // Stream
   lines.push(`  ${c.accent('Stream:')} ${config.streamName}`);
@@ -31,7 +31,7 @@ export function getResourceSummary(config: Config, resources: ExistingResources)
   if (resources.sink.id) {
     lines.push(`    ID: ${resources.sink.id}`);
   }
-  lines.push(`    Path: ${config.bucketName}/events/`);
+  lines.push(`    Table: analytics.events (Iceberg)`);
 
   // Pipeline
   lines.push(`  ${c.accent('Pipeline:')} ${config.pipelineName}`);
@@ -52,7 +52,6 @@ export function getWorkerUrlsSummary(deployedUrls: DeployedUrls): string[] {
   lines.push(c.header('Deployed Workers'));
   lines.push('');
   lines.push(`  ${symbols.success} Event Ingest: ${deployedUrls.ingest || c.warning('(not deployed)')}`);
-  lines.push(`  ${symbols.success} DuckDB API:   ${deployedUrls.duckdb || c.warning('(not deployed)')}`);
   lines.push(`  ${symbols.success} Query API:    ${deployedUrls.query || c.warning('(not deployed)')}`);
 
   return lines;
@@ -73,12 +72,12 @@ export function getTestCommands(deployedUrls: DeployedUrls): string[] {
     lines.push('');
   }
 
-  if (deployedUrls.duckdb) {
-    lines.push(c.header('Query Data (via DuckDB)'));
+  if (deployedUrls.query) {
+    lines.push(c.header('Query Data (via Basin SQL)'));
     lines.push('');
-    lines.push(c.dim('  curl -X POST ' + deployedUrls.duckdb + '/query \\'));
+    lines.push(c.dim('  curl -X POST ' + deployedUrls.query + '/query \\'));
     lines.push(c.dim('    -H "Content-Type: application/json" \\'));
-    lines.push(c.dim('    -d \'{"query": "SELECT * FROM r2_datalake.analytics.events LIMIT 5"}\''));
+    lines.push(c.dim('    -d \'{"sql": "SELECT type, COUNT(*) FROM analytics.events GROUP BY type"}\''));
     lines.push('');
   }
 

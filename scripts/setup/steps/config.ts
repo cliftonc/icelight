@@ -57,7 +57,6 @@ export async function gatherConfig(): Promise<{ projectName: string; config: Con
 export function getWorkerNames(projectName: string) {
   return {
     eventIngest: `${projectName}-event-ingest`,
-    duckdbApi: `${projectName}-duckdb-api`,
     queryApi: `${projectName}-query-api`,
   };
 }
@@ -67,10 +66,10 @@ export function getWorkerNames(projectName: string) {
  */
 export function getConfigDisplayLines(config: Config, projectName?: string): string[] {
   const lines = [
-    `${config.bucketName.padEnd(30)} (R2 Bucket)`,
-    `${config.streamName.padEnd(30)} (Pipeline Stream)`,
-    `${config.sinkName.padEnd(30)} (Pipeline Sink)`,
-    `${config.pipelineName.padEnd(30)} (Pipeline)`,
+    `${config.bucketName.padEnd(30)} (R2 Bucket + Basin Catalog)`,
+    `${config.streamName.padEnd(30)} (Basin Pipelines Stream)`,
+    `${config.sinkName.padEnd(30)} (Basin Pipelines Sink)`,
+    `${config.pipelineName.padEnd(30)} (Basin Pipeline)`,
     `${config.kvCacheName.padEnd(30)} (KV Namespace)`,
     `${config.d1DatabaseName.padEnd(30)} (D1 Database)`,
   ];
@@ -79,7 +78,6 @@ export function getConfigDisplayLines(config: Config, projectName?: string): str
     const workers = getWorkerNames(projectName);
     lines.push(
       `${workers.eventIngest.padEnd(30)} (Worker)`,
-      `${workers.duckdbApi.padEnd(30)} (Worker + Container)`,
       `${workers.queryApi.padEnd(30)} (Worker)`,
     );
   }

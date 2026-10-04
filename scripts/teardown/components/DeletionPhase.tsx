@@ -21,7 +21,7 @@ import { deleteLocalConfigs } from '../steps/local-files.js';
  */
 const DELETION_GROUPS: FlowGroupDefinition[] = [
   { key: 'workers', title: 'Workers' },
-  { key: 'containers', title: 'Containers' },
+  { key: 'containers', title: 'Containers (legacy DuckDB)' },
   { key: 'pipeline', title: 'Pipeline' },
   { key: 'storage', title: 'Storage' },
   { key: 'cleanup', title: 'Cleanup' },

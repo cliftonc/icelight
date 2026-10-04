@@ -3,7 +3,7 @@
  */
 
 import type { Config, ResourceIds } from '../core/index.js';
-import { runQuietAsync } from '../core/index.js';
+import { runQuietAsync, findBasinResourceId } from '../core/index.js';
 
 /**
  * Create empty ResourceIds object
@@ -81,66 +81,21 @@ export async function lookupContainerIds(containerNames: string[]): Promise<Map<
  * Look up stream ID from wrangler
  */
 export async function lookupStreamId(streamName: string): Promise<string | null> {
-  const output = await runQuietAsync('wrangler pipelines streams list');
-
-  if (output) {
-    const lines = output.split('\n');
-    for (const line of lines) {
-      if (line.includes(streamName)) {
-        const idMatch = line.match(/([a-f0-9]{32})/i);
-        if (idMatch) {
-          return idMatch[1];
-        }
-        break;
-      }
-    }
-  }
-
-  return null;
+  return findBasinResourceId('stream', streamName);
 }
 
 /**
  * Look up sink ID from wrangler
  */
 export async function lookupSinkId(sinkName: string): Promise<string | null> {
-  const output = await runQuietAsync('wrangler pipelines sinks list');
-
-  if (output) {
-    const lines = output.split('\n');
-    for (const line of lines) {
-      if (line.includes(sinkName)) {
-        const idMatch = line.match(/([a-f0-9]{32})/i);
-        if (idMatch) {
-          return idMatch[1];
-        }
-        break;
-      }
-    }
-  }
-
-  return null;
+  return findBasinResourceId('sink', sinkName);
 }
 
 /**
  * Look up pipeline ID from wrangler
  */
 export async function lookupPipelineId(pipelineName: string): Promise<string | null> {
-  const output = await runQuietAsync('wrangler pipelines list');
-
-  if (output) {
-    const lines = output.split('\n');
-    for (const line of lines) {
-      if (line.includes(pipelineName)) {
-        const idMatch = line.match(/([a-f0-9]{32})/i);
-        if (idMatch) {
-          return idMatch[1];
-        }
-        break;
-      }
-    }
-  }
-
-  return null;
+  return findBasinResourceId('pipeline', pipelineName);
 }
 
 /**

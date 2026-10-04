@@ -1,19 +1,23 @@
 /**
- * Drizzle schema for analytics events stored in R2 Data Catalog
+ * Drizzle schema for analytics events stored in Basin Catalog
  *
  * This schema matches the FlattenedEvent structure from @icelight/core
- * as stored in the Iceberg table via Cloudflare Pipelines.
+ * as stored in the Iceberg table via Basin Pipelines.
  */
 
-import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgSchema, text, timestamp } from 'drizzle-orm/pg-core';
+
+/**
+ * Basin Catalog namespace the pipeline sink writes to
+ */
+export const analytics = pgSchema('analytics');
 
 /**
  * Events table schema
  *
- * Note: The DuckDB container sets `USE r2_datalake.analytics;` so we can
- * reference the table directly without catalog/schema prefix.
+ * Queries reference the table as "analytics"."events" in Basin SQL.
  */
-export const events = pgTable('events', {
+export const events = analytics.table('events', {
   // Pipeline-added timestamp
   __ingest_ts: timestamp('__ingest_ts', { mode: 'date' }),
 
@@ -29,7 +33,7 @@ export const events = pgTable('events', {
   event: text('event'), // For track events
   name: text('name'), // For page/screen events
 
-  // JSON fields (stored as text in Iceberg)
+  // JSON fields (stored as JSON strings in Iceberg)
   properties: text('properties'), // JSON string
   traits: text('traits'), // JSON string
   context: text('context'), // JSON string

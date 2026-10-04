@@ -2,7 +2,7 @@
  * JSON extraction helpers for Drizzle Cube
  *
  * Builds SQL expressions for extracting fields from JSON columns
- * using DuckDB's JSON functions.
+ * using Basin SQL's JSON functions (json_get_str, json_get_float, ...).
  */
 
 import { sql, type SQL } from 'drizzle-orm';
@@ -12,10 +12,29 @@ import type { JsonFieldConfig } from './json-config.js';
 type JsonColumn = 'properties' | 'traits' | 'context';
 
 /**
- * Build a SQL expression for extracting a JSON field using DuckDB syntax
+ * Convert a JSONPath like '$.geo.region' or '$.items[0].sku' into the
+ * key/index arguments Basin SQL's json_get_* functions expect.
+ */
+export function jsonPathToKeys(path: string): Array<string | number> {
+  const keys: Array<string | number> = [];
+  const trimmed = path.replace(/^\$\.?/, '');
+  const pattern = /([^.[\]]+)|\[(\d+)\]|\[['"]([^'"]+)['"]\]/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(trimmed)) !== null) {
+    if (match[1] !== undefined) keys.push(match[1]);
+    else if (match[2] !== undefined) keys.push(parseInt(match[2], 10));
+    else if (match[3] !== undefined) keys.push(match[3]);
+  }
+
+  return keys;
+}
+
+/**
+ * Build a SQL expression for extracting a JSON field using Basin SQL syntax
  *
- * Note: The path is inlined as a literal string using sql.raw() rather than
- * being parameterized, because DuckDB's JSON functions expect literal paths.
+ * Note: Keys are inlined as literals using sql.raw() rather than being
+ * parameterized, so the generated SQL stays readable and cacheable.
  */
 export function jsonExtract(
   column: JsonColumn,
@@ -23,18 +42,19 @@ export function jsonExtract(
   type: 'string' | 'number' | 'boolean' = 'string'
 ): SQL {
   const col = events[column];
-  // Escape single quotes in path and inline as literal
-  const safePath = path.replace(/'/g, "''");
-  const pathLiteral = sql.raw(`'${safePath}'`);
+  const keys = jsonPathToKeys(path)
+    .map((key) => (typeof key === 'number' ? String(key) : `'${key.replace(/'/g, "''")}'`))
+    .join(', ');
+  const keyArgs = sql.raw(keys);
 
   switch (type) {
     case 'number':
-      return sql<number>`CAST(json_extract(${col}, ${pathLiteral}) AS DOUBLE)`;
+      return sql<number>`json_get_float(${col}, ${keyArgs})`;
     case 'boolean':
-      return sql<boolean>`CAST(json_extract(${col}, ${pathLiteral}) AS BOOLEAN)`;
+      return sql<boolean>`json_get_bool(${col}, ${keyArgs})`;
     case 'string':
     default:
-      return sql<string>`json_extract_string(${col}, ${pathLiteral})`;
+      return sql<string>`json_get_str(${col}, ${keyArgs})`;
   }
 }
 

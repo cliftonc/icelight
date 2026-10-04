@@ -1,8 +1,7 @@
-import { sql } from 'drizzle-orm';
 import { defineCube } from 'drizzle-cube/server';
 import type { Cube } from 'drizzle-cube/server';
 import { events } from '../schema/events.js';
-import { buildJsonDimensions } from './json-helpers.js';
+import { buildJsonDimensions, jsonExtract } from './json-helpers.js';
 import { DEFAULT_CUBE_CONFIG, type CubeJsonConfig } from './json-config.js';
 
 // Note: Type assertions needed due to drizzle-orm version mismatch
@@ -20,7 +19,7 @@ export function createEventsCube(config: CubeJsonConfig = DEFAULT_CUBE_CONFIG): 
   const contextDimensions = buildJsonDimensions('context', config.context ?? []);
 
   // Check if revenue field is configured for the measure
-  const hasRevenue = config.properties?.some(f => f.name === 'revenue') ?? false;
+  const revenueField = config.properties?.find(f => f.name === 'revenue');
 
   return defineCube('Events', {
     title: 'Analytics Events',
@@ -139,18 +138,18 @@ export function createEventsCube(config: CubeJsonConfig = DEFAULT_CUBE_CONFIG): 
         sql: events.anonymousId as any,
       },
       // Revenue measures (only if revenue field is configured)
-      ...(hasRevenue ? {
+      ...(revenueField ? {
         totalRevenue: {
           name: 'totalRevenue',
           title: 'Total Revenue',
           type: 'sum',
-          sql: sql<number>`CAST(json_extract(${events.properties}, '$.revenue') AS DOUBLE)` as any,
+          sql: jsonExtract('properties', revenueField.path, 'number') as any,
         },
         avgRevenue: {
           name: 'avgRevenue',
           title: 'Average Revenue',
           type: 'avg',
-          sql: sql<number>`CAST(json_extract(${events.properties}, '$.revenue') AS DOUBLE)` as any,
+          sql: jsonExtract('properties', revenueField.path, 'number') as any,
         },
       } : {}),
     },

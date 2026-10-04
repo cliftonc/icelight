@@ -11,7 +11,7 @@
  *   INGEST_API_URL - URL to the ingest API (default: http://localhost:8787)
  */
 
-// Dynamic import for the event generator module (TypeScript in worker)
+import { seedEvents } from './shared/seed-events.js';
 
 // Colors for output
 const colors = {
@@ -26,24 +26,6 @@ const colors = {
 
 function log(message: string, color: keyof typeof colors = 'reset') {
   console.log(`${colors[color]}${message}${colors.reset}`);
-}
-
-/**
- * Split an array into chunks of a specified size
- */
-function chunk<T>(array: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < array.length; i += size) {
-    chunks.push(array.slice(i, i + size));
-  }
-  return chunks;
-}
-
-/**
- * Sleep for a specified number of milliseconds
- */
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function main() {
@@ -71,75 +53,39 @@ async function main() {
   log(`Target ingest API: ${ingestApiUrl}`, 'dim');
   log(`Batch size: ${batchSize}\n`, 'dim');
 
-  // Import the event generator module
-  const { generateHistoricalEvents } = await import(
-    '../workers/query-api/src/event-generator/index.js'
-  );
+  const result = await seedEvents({
+    ingestApiUrl,
+    days,
+    batchSize,
+    onProgress: ({ batch, totalBatches, sent, error }) => {
+      const progress = `[${batch}/${totalBatches}]`;
+      if (error) {
+        log(`${progress} Failed: ${error}`, 'red');
+      } else if (batch % 10 === 0 || batch === totalBatches) {
+        // Show progress every 10 batches or on last batch
+        log(`${progress} Sent ${sent.toLocaleString()} events...`, 'dim');
+      }
+    },
+  });
 
-  // Generate events
-  const startTime = Date.now();
-  const result = generateHistoricalEvents(days, 75, 66);
-  const generationTime = ((Date.now() - startTime) / 1000).toFixed(2);
-
-  log(`\nGenerated ${result.events.length.toLocaleString()} events in ${generationTime}s`, 'green');
+  log(`\nGenerated ${result.total.toLocaleString()} events`, 'green');
   log(`  Users: ${result.userCount}`, 'dim');
   log(`  Sessions: ${result.sessionCount}`, 'dim');
   log(`  Event breakdown:`, 'dim');
-  log(`    track: ${result.eventCounts.track}`, 'dim');
-  log(`    identify: ${result.eventCounts.identify}`, 'dim');
-  log(`    page: ${result.eventCounts.page}`, 'dim');
-  log(`    screen: ${result.eventCounts.screen}`, 'dim');
-  log(`    group: ${result.eventCounts.group}`, 'dim');
-
-  // Send events to the ingest API
-  log(`\nSending events to ingest API...`, 'yellow');
-
-  const batches = chunk(result.events, batchSize);
-  let sent = 0;
-  let errors = 0;
-
-  for (let i = 0; i < batches.length; i++) {
-    const batch = batches[i];
-    const progress = `[${i + 1}/${batches.length}]`;
-
-    try {
-      const response = await fetch(`${ingestApiUrl}/v1/batch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batch }),
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        log(`${progress} Failed: ${response.status} ${text}`, 'red');
-        errors++;
-      } else {
-        sent += batch.length;
-        // Show progress every 10 batches or on last batch
-        if ((i + 1) % 10 === 0 || i === batches.length - 1) {
-          log(`${progress} Sent ${sent.toLocaleString()} events...`, 'dim');
-        }
-      }
-    } catch (error) {
-      log(`${progress} Error: ${error instanceof Error ? error.message : String(error)}`, 'red');
-      errors++;
-    }
-
-    // Small delay between batches to avoid overwhelming the API
-    if (i < batches.length - 1) {
-      await sleep(50);
-    }
+  for (const [type, count] of Object.entries(result.eventCounts)) {
+    log(`    ${type}: ${count}`, 'dim');
   }
 
-  const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
+  const totalTime = (result.durationMs / 1000).toFixed(2);
 
   log(`\n${'='.repeat(60)}`, 'cyan');
-  if (errors === 0) {
-    log(`  Successfully sent ${sent.toLocaleString()} events in ${totalTime}s`, 'green');
+  if (result.errors === 0) {
+    log(`  Successfully sent ${result.sent.toLocaleString()} events in ${totalTime}s`, 'green');
   } else {
-    log(`  Sent ${sent.toLocaleString()} events with ${errors} batch errors in ${totalTime}s`, 'yellow');
+    log(`  Sent ${result.sent.toLocaleString()} events with ${result.errors} batch errors in ${totalTime}s`, 'yellow');
   }
   log('='.repeat(60), 'cyan');
+  log('Events appear in Basin SQL after the next sink roll (about 1-2 minutes).', 'dim');
 }
 
 main().catch(error => {

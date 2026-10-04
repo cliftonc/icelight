@@ -48,7 +48,10 @@ export {
   parseJsonc,
   readWranglerConfig,
   writeWranglerLocalConfig,
+  findBasinResourceId,
+  parseBasinList,
 } from './wrangler.js';
+export type { BasinResourceKind } from './wrangler.js';
 
 // UI utilities
 export {

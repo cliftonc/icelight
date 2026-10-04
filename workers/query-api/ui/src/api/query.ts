@@ -4,6 +4,8 @@ export interface QueryResult {
   success: boolean;
   data: Record<string, unknown>[];
   columns: string[];
+  /** Compressed bytes scanned by Basin SQL (billed per byte scanned) */
+  bytesScanned?: number;
 }
 
 interface QueryRequest {
@@ -39,19 +41,26 @@ async function executeQuery(request: QueryRequest): Promise<QueryResult> {
   const result = (await response.json()) as {
     success: boolean;
     data: Record<string, unknown>[];
+    meta?: {
+      columns?: Array<{ name: string }>;
+      metrics?: { bytesScanned?: number };
+    };
+    error?: string;
   };
 
   if (!result.success) {
-    throw new Error('Query failed');
+    throw new Error(result.error || 'Query failed');
   }
 
-  // Extract column names from the first row if data exists
-  const columns = result.data.length > 0 ? Object.keys(result.data[0]) : [];
+  // Prefer schema column order; fall back to the first row's keys
+  const columns = result.meta?.columns?.map((c) => c.name)
+    ?? (result.data.length > 0 ? Object.keys(result.data[0]) : []);
 
   return {
     success: result.success,
     data: result.data,
     columns,
+    bytesScanned: result.meta?.metrics?.bytesScanned,
   };
 }
 

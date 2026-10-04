@@ -1,4 +1,4 @@
-import type { R2SqlResult } from './sql-proxy.js';
+import type { BasinSqlResult } from './basin-sql.js';
 
 export type OutputFormat = 'json' | 'csv';
 
@@ -10,7 +10,7 @@ export interface FormattedResult {
 /**
  * Format query results as JSON
  */
-function formatJson(result: R2SqlResult): FormattedResult {
+function formatJson(result: BasinSqlResult): FormattedResult {
   return {
     contentType: 'application/json',
     body: JSON.stringify({
@@ -25,7 +25,7 @@ function formatJson(result: R2SqlResult): FormattedResult {
 /**
  * Format query results as CSV
  */
-function formatCsv(result: R2SqlResult): FormattedResult {
+function formatCsv(result: BasinSqlResult): FormattedResult {
   if (!result.success || !result.data || result.data.length === 0) {
     return {
       contentType: 'text/csv',
@@ -72,7 +72,7 @@ function escapeCsvValue(value: unknown): string {
  * Format query results in the specified format
  */
 export function formatResult(
-  result: R2SqlResult,
+  result: BasinSqlResult,
   format: OutputFormat = 'json'
 ): FormattedResult {
   switch (format) {

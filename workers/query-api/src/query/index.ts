@@ -4,16 +4,18 @@ export { createQueryApp } from './handler.js';
 // Types
 export type { QueryEnv, QueryRequest, QueryResponse, QueryAppOptions, CacheOptions, CacheProviderFactory } from './handler.js';
 
-// SQL proxy utilities
-export { executeQuery, listTables, describeTable } from './sql-proxy.js';
-export type { R2SqlConfig, R2SqlResult } from './sql-proxy.js';
+// Basin SQL utilities
+export { executeQuery, listTables, describeTable, bucketFromWarehouse } from './basin-sql.js';
+export type { BasinSqlConfig, BasinSqlResult, BasinSqlMetrics } from './basin-sql.js';
+export { createBasinDrizzle, inlineParams, formatValue, rewriteForBasin } from './basin-drizzle.js';
+export type { BasinQuery } from './basin-drizzle.js';
 
 // Result formatting
 export { formatResult } from './formatter.js';
 export type { OutputFormat, FormattedResult } from './formatter.js';
 
 // Drizzle schema for events
-export { events } from './schema/events.js';
+export { events, analytics } from './schema/events.js';
 export type { Event, NewEvent } from './schema/events.js';
 
 // Drizzle-cube definitions
@@ -28,7 +30,7 @@ export {
 export type { JsonFieldConfig, CubeJsonConfig } from './cubes/json-config.js';
 
 // JSON helpers (for advanced usage)
-export { jsonExtract, buildJsonDimension, buildJsonDimensions } from './cubes/json-helpers.js';
+export { jsonExtract, jsonPathToKeys, buildJsonDimension, buildJsonDimensions } from './cubes/json-helpers.js';
 export type { JsonDimension } from './cubes/json-helpers.js';
 
 // Default export - ready-to-use Hono app

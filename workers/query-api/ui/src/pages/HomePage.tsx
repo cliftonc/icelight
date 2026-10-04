@@ -269,11 +269,11 @@ function ArchitectureDiagram() {
         <Arrow />
         <ArchitectureNode label="Ingest Worker" sublabel="Cloudflare" href="#ingest-worker" />
         <Arrow />
-        <ArchitectureNode label="Pipelines" sublabel="Cloudflare" beta href="#pipelines" />
+        <ArchitectureNode label="Basin Pipelines" sublabel="Cloudflare" href="#pipelines" />
         <Arrow />
-        <ArchitectureNode label="R2 + Iceberg" sublabel="Cloudflare" beta href="#r2-iceberg" />
+        <ArchitectureNode label="Basin Catalog" sublabel="R2 + Iceberg" href="#r2-iceberg" />
         <Arrow />
-        <ArchitectureNode label="DuckDB" sublabel="Cloudflare Container" beta href="#duckdb" />
+        <ArchitectureNode label="Basin SQL" sublabel="Cloudflare" href="#basin-sql" />
         <Arrow />
         <ArchitectureNode label="Drizzle-Cube" sublabel="Semantic Layer" href="#drizzle-cube" />
       </div>
@@ -426,7 +426,7 @@ function QuickStartStep({ number, title, code }: { number: number; title: string
   );
 }
 
-type Page = 'home' | 'query' | 'duckdb' | 'simulator' | 'analysis' | 'dashboard';
+type Page = 'home' | 'query' | 'simulator' | 'analysis' | 'dashboard';
 
 interface HomePageProps {
   onNavigate: (page: Page) => void;
@@ -456,7 +456,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         {
           question: 'How much setup is required to pilot this?',
           answer:
-            'You need a Cloudflare account, an R2 bucket, and the Pipelines+Containers betas enabled. Clone the repo, run pnpm launch, and point a test site or RudderStack source at the ingest endpoint.',
+            'You need a Cloudflare account on the Workers Paid plan (required for Basin Pipelines). Clone the repo, run pnpm launch, and point a test site or RudderStack source at the ingest endpoint.',
         },
       ],
     },
@@ -481,12 +481,12 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         {
           question: 'How does Parquet fit into Iceberg on R2 and how should I size files?',
           answer:
-            'Iceberg stores data files as Parquet objects referenced by manifests. Aim for 64–256 MB Parquet files to balance read parallelism with metadata overhead; enable compaction to merge tiny files. Use column pruning and predicate pushdown (DuckDB does both) to minimize bytes read and keep R2 egress low.',
+            'Iceberg stores data files as Parquet objects referenced by manifests. Aim for 64–256 MB Parquet files to balance read parallelism with metadata overhead; enable compaction to merge tiny files. Basin Catalog can compact small files automatically, and Basin SQL uses column pruning and predicate pushdown to minimize bytes scanned.',
         },
         {
           question: 'How do I keep costs low on R2 + Iceberg?',
           answer:
-            'Use partitioning to prune scans, compact small Parquet files via Pipelines’ batching, cache common queries with DuckDB result caching, and expire old snapshots while keeping critical checkpoints for time-travel.',
+            'Use partitioning to prune scans, enable Basin Catalog compaction and snapshot expiration, and cache common semantic-layer queries in KV. Basin SQL bills by compressed bytes scanned, so selective filters and LIMITs directly reduce cost.',
         },
       ],
     },
@@ -494,29 +494,29 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       title: 'Query & Semantic Layer',
       items: [
         {
-          question: 'How does DuckDB query the Iceberg data stored on R2?',
+          question: 'How does Basin SQL query the Iceberg data stored on R2?',
           answer:
-            'DuckDB in a Cloudflare Container mounts R2 via presigned URLs, reads Iceberg metadata, and pushes down projections and filters. You get full SQL (joins, window functions) even while R2 SQL beta is limited.',
+            'Basin SQL is Cloudflare’s serverless, distributed query engine. It reads Iceberg metadata from Basin Catalog, prunes partitions and files, and supports aggregations, joins, window functions, CTEs and JSON functions, with no containers or clusters to run.',
         },
         {
           question: 'Can I run SQL over streaming analytics data in near real-time?',
           answer:
-            'Yes. Pipelines flush small batches frequently so new objects appear within minutes. DuckDB or the semantic API can query the latest Iceberg snapshot for ad-hoc analysis or dashboard refreshes.',
+            'Yes. Pipelines flush small batches frequently so new objects appear within minutes. Basin SQL and the semantic API query the latest Iceberg snapshot for ad-hoc analysis or dashboard refreshes.',
         },
         {
           question: 'What does the Drizzle-Cube semantic layer add?',
           answer:
-            'Drizzle-Cube turns business metrics into reusable measures and dimensions. It generates optimized SQL against Iceberg/DuckDB, enforces row-level security, and feeds both dashboards and APIs from one model.',
+            'Drizzle-Cube turns business metrics into reusable measures and dimensions. It generates optimized SQL that runs on Basin SQL, enforces row-level security, and feeds both dashboards and APIs from one model.',
         },
         {
           question: 'How does the semantic API differ from running raw SQL?',
           answer:
-            'The semantic API sits in front of DuckDB: clients request metrics like “weekly active users” and Drizzle-Cube compiles safe SQL with filters and joins. This prevents leaky queries and keeps KPI logic consistent.',
+            'The semantic API sits in front of Basin SQL: clients request metrics like “weekly active users” and Drizzle-Cube compiles safe SQL with filters and joins. This prevents leaky queries and keeps KPI logic consistent.',
         },
         {
           question: 'Can I mix Iceberg with other data sources?',
           answer:
-            'Yes. DuckDB can attach additional Parquet/CSV files or remote tables, and Drizzle-Cube can model joins between your Iceberg events and product metadata to enrich analytics without moving data out of R2.',
+            'Yes. Basin SQL supports joins across tables in the same catalog, so Drizzle-Cube can model joins between your events and other Iceberg tables. External engines like DuckDB, Spark or PyIceberg can also attach the catalog via its Iceberg REST endpoint.',
         },
       ],
     },
@@ -529,9 +529,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             'Cloudflare Web Analytics is a hosted product. Icelight is a build-it-yourself stack that keeps raw events in your R2 account so you can model custom events, join to product data, and control retention.',
         },
         {
-          question: 'Are the Cloudflare services used here in beta?',
+          question: 'Are the Cloudflare services used here production ready?',
           answer:
-            'Yes—Pipelines, Containers, and R2 SQL are still in beta. Expect limits (throughput caps, evolving schemas, region availability) and breaking changes. Keep environments versioned, pin Wrangler, and test snapshots before production rollout.',
+            'Yes. Basin (Pipelines, Catalog and SQL) has been generally available since October 2026. Some limits remain: streams, sinks and pipeline SQL cannot be changed after creation, and Basin SQL is read-only. Check the Basin pricing and limits pages before production rollout.',
         },
       ],
     },
@@ -549,7 +549,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           </h1>
           <p className="text-lg text-base-content/60 mb-10 max-w-2xl mx-auto">
             Analytics.js compatible events to Iceberg tables on Cloudflare.
-            Query with DuckDB or the semantic API.
+            Query with Basin SQL or the semantic API.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <button
@@ -665,7 +665,7 @@ analytics.track('Purchase Completed', { revenue: 99.99 });`}
         <DetailSection
           id="ingest-worker"
           title="Ingest Worker"
-          description="A Cloudflare Worker that receives analytics events, validates the payload, and forwards them to Cloudflare Pipelines. Handles CORS, authentication, and batch processing."
+          description="A Cloudflare Worker that receives analytics events, validates the payload, and forwards them to Basin Pipelines. Handles CORS, authentication, and batch processing."
           align="right"
           links={[
             { label: 'Cloudflare Workers', url: 'https://developers.cloudflare.com/workers/' },
@@ -700,12 +700,11 @@ analytics.track('Purchase Completed', { revenue: 99.99 });`}
         {/* 3. Pipelines */}
         <DetailSection
           id="pipelines"
-          title="Cloudflare Pipelines"
-          description="Cloudflare's streaming data pipeline batches incoming events and writes them to R2 in Apache Iceberg format. Events are buffered and flushed periodically for efficient storage."
+          title="Basin Pipelines"
+          description="Cloudflare's streaming ingestion service batches incoming events and writes them to R2 as Apache Iceberg tables. Events are buffered and flushed every minute for efficient storage."
           align="left"
-          beta
           links={[
-            { label: 'Cloudflare Pipelines', url: 'https://developers.cloudflare.com/pipelines/' },
+            { label: 'Basin Pipelines', url: 'https://developers.cloudflare.com/basin-pipelines/' },
           ]}
         >
           <div>
@@ -732,12 +731,11 @@ analytics.track('Purchase Completed', { revenue: 99.99 });`}
         {/* 4. R2 + Iceberg */}
         <DetailSection
           id="r2-iceberg"
-          title="R2 + Apache Iceberg"
-          description="Events are stored in Cloudflare R2 using the Apache Iceberg table format. This provides columnar storage for fast analytical queries, schema evolution, and time travel capabilities."
+          title="Basin Catalog + Apache Iceberg"
+          description="Events are stored in Cloudflare R2 as Apache Iceberg tables managed by Basin Catalog. This provides columnar storage for fast analytical queries, schema evolution, and time travel capabilities."
           align="right"
-          beta
           links={[
-            { label: 'R2 Data Catalog', url: 'https://developers.cloudflare.com/r2/data-catalog/' },
+            { label: 'Basin Catalog', url: 'https://developers.cloudflare.com/basin-catalog/' },
             { label: 'Apache Iceberg', url: 'https://iceberg.apache.org/' },
           ]}
         >
@@ -771,42 +769,33 @@ analytics.track('Purchase Completed', { revenue: 99.99 });`}
                 </li>
               </ul>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => onNavigate('query')}
-                className="px-4 py-2 bg-primary text-primary-content rounded text-sm font-medium hover:bg-primary/90 transition-colors"
-              >
-                Try R2 SQL Query
-              </button>
-            </div>
           </div>
         </DetailSection>
 
         <FlowConnector direction="right-to-left" />
 
-        {/* 5. DuckDB */}
+        {/* 5. Basin SQL */}
         <DetailSection
-          id="duckdb"
-          title="DuckDB"
-          description="DuckDB runs in a Cloudflare Container, providing full SQL capabilities including joins and aggregations. This overcomes the current R2 SQL beta limitations for complex analytical queries."
+          id="basin-sql"
+          title="Basin SQL"
+          description="Basin SQL is Cloudflare's serverless query engine for Iceberg tables in Basin Catalog. It supports aggregations, joins, window functions and JSON functions, and powers both the SQL explorer and the semantic layer, with no servers or containers to run."
           align="left"
-          beta
           image={{
             light: '/sql_query_light.png',
             dark: '/sql_query_dark.png',
-            alt: 'DuckDB query interface with results',
+            alt: 'Basin SQL query interface with results',
           }}
           links={[
-            { label: 'DuckDB Documentation', url: 'https://duckdb.org/docs/' },
-            { label: 'Cloudflare Containers', url: 'https://developers.cloudflare.com/containers/' },
+            { label: 'Basin SQL', url: 'https://developers.cloudflare.com/basin-sql/' },
+            { label: 'Basin pricing', url: 'https://developers.cloudflare.com/basin/platform/pricing/' },
           ]}
         >
           <div className="flex flex-wrap gap-3">
             <button
-              onClick={() => onNavigate('duckdb')}
+              onClick={() => onNavigate('query')}
               className="px-4 py-2 bg-primary text-primary-content rounded text-sm font-medium hover:bg-primary/90 transition-colors"
             >
-              Try DuckDB Query
+              Try Basin SQL Query
             </button>
           </div>
         </DetailSection>
@@ -949,9 +938,8 @@ cd icelight && pnpm install`}
         <div className="container mx-auto max-w-2xl text-center">
           <h2 className="text-2xl font-bold mb-4">About</h2>
           <p className="text-base-content/60 leading-relaxed">
-            I built this to explore Cloudflare's data pipeline and DuckDB, wiring
-            everything from Analytics.js to working dashboards. Most components are
-            still in beta, so use at your own risk. Questions?{' '}
+            I built this to explore Cloudflare Basin, wiring everything from
+            Analytics.js to working dashboards. Questions?{' '}
             <a href="mailto:clifton@guidemode.dev" className="text-primary hover:underline">
               Email me
             </a>{' '}
@@ -974,7 +962,7 @@ cd icelight && pnpm install`}
           <h2 className="text-2xl font-bold text-center mb-4">Apache Iceberg on R2 FAQ</h2>
           <p className="text-center text-base-content/60 max-w-2xl mx-auto mb-6">
             Deep-dive answers for the queries we see most: Apache Iceberg, Iceberg tables on R2,
-            DuckDB, RudderStack, Cloudflare Workers, Pipelines, and the Drizzle-Cube semantic layer.
+            Basin SQL, RudderStack, Cloudflare Workers, Basin Pipelines, and the Drizzle-Cube semantic layer.
           </p>
           <div className="grid gap-6 md:gap-8 md:grid-cols-2">
             {faqSections.map((section, sectionIdx) => (
@@ -1024,20 +1012,20 @@ cd icelight && pnpm install`}
               GitHub
             </a>
             <a
-              href="https://developers.cloudflare.com/pipelines/"
+              href="https://developers.cloudflare.com/basin/"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-base-content transition-colors"
             >
-              Cloudflare Pipelines
+              Cloudflare Basin
             </a>
             <a
-              href="https://developers.cloudflare.com/r2/data-catalog/"
+              href="https://developers.cloudflare.com/basin-sql/"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-base-content transition-colors"
             >
-              R2 Data Catalog
+              Basin SQL
             </a>
             <a
               href="https://try.drizzle-cube.dev"

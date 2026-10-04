@@ -18,7 +18,8 @@ export interface FlowTaskDefinition<T = unknown> {
   key: string;
   title: string;
   group: string;
-  task: (context: T) => Promise<void>;
+  /** `report` updates the running task's status message (e.g. progress, waiting) */
+  task: (context: T, report: (message: string) => void) => Promise<void>;
   skip?: (context: T) => boolean | string;
 }
 
@@ -155,7 +156,15 @@ export function StepFlow<T>({
           return next;
         });
 
-        await currentTask.task(contextRef.current);
+        const report = (message: string) => {
+          setTaskStates((prev) => {
+            const next = new Map(prev);
+            next.set(currentTask.key, { status: 'running', message });
+            return next;
+          });
+        };
+
+        await currentTask.task(contextRef.current, report);
         setTaskStates((prev) => {
           const next = new Map(prev);
           next.set(currentTask.key, { status: 'success' });

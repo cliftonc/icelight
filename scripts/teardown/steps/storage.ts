@@ -117,6 +117,11 @@ export async function listBucketObjects(
  */
 export type EmptyBucketProgressCallback = (deleted: number, total: number) => void;
 
+/**
+ * Status callback for long waits (e.g. API rate limiting)
+ */
+export type StatusCallback = (message: string) => void;
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -131,7 +136,8 @@ async function deleteObject(
   bucketName: string,
   key: string,
   apiToken: string,
-  accountId: string
+  accountId: string,
+  onStatus?: StatusCallback
 ): Promise<boolean> {
   const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${bucketName}/objects/${encodeURIComponent(key)}`;
   for (let attempt = 0; attempt < 10; attempt++) {
@@ -142,7 +148,9 @@ async function deleteObject(
       });
       if (response.status === 429) {
         const retryAfter = parseInt(response.headers.get('retry-after') ?? '60', 10);
-        await sleep((Number.isFinite(retryAfter) ? retryAfter : 60) * 1000);
+        const seconds = Number.isFinite(retryAfter) ? retryAfter : 60;
+        onStatus?.(`Cloudflare API rate limit reached, waiting ${seconds}s before continuing...`);
+        await sleep(seconds * 1000);
         continue;
       }
       return response.ok || response.status === 404;
@@ -164,7 +172,8 @@ async function deleteObjects(
   keys: string[],
   apiToken: string,
   accountId: string,
-  onProgress?: EmptyBucketProgressCallback
+  onProgress?: EmptyBucketProgressCallback,
+  onStatus?: StatusCallback
 ): Promise<{ deleted: number; failed: number }> {
   const concurrency = 10;
   let deleted = 0;
@@ -174,7 +183,7 @@ async function deleteObjects(
   const worker = async () => {
     while (next < keys.length) {
       const key = keys[next++];
-      if (await deleteObject(bucketName, key, apiToken, accountId)) {
+      if (await deleteObject(bucketName, key, apiToken, accountId, onStatus)) {
         deleted++;
       } else {
         failed++;
@@ -194,7 +203,8 @@ export async function emptyBucket(
   bucketName: string,
   apiToken: string,
   accountId: string,
-  onProgress?: EmptyBucketProgressCallback
+  onProgress?: EmptyBucketProgressCallback,
+  onStatus?: StatusCallback
 ): Promise<{ success: boolean; deletedCount: number; failedCount: number }> {
   const objects = await listBucketObjects(bucketName, apiToken, accountId);
 
@@ -202,7 +212,7 @@ export async function emptyBucket(
     return { success: true, deletedCount: 0, failedCount: 0 };
   }
 
-  const { deleted, failed } = await deleteObjects(bucketName, objects, apiToken, accountId, onProgress);
+  const { deleted, failed } = await deleteObjects(bucketName, objects, apiToken, accountId, onProgress, onStatus);
 
   // Some deletes failed - retry what's left via wrangler
   if (failed > 0) {
@@ -225,13 +235,14 @@ export async function emptyBucket(
 /**
  * Delete an R2 bucket
  */
-export async function deleteBucket(bucketName: string): Promise<DeletionResult> {
+export async function deleteBucket(bucketName: string, onStatus?: StatusCallback): Promise<DeletionResult> {
   let result = await runCommandWithOutputAsync(
     `wrangler r2 bucket delete ${bucketName}`
   );
 
   // Emptying a large bucket can use up the API rate limit (code 971); wait it out
   for (let attempt = 0; attempt < 5 && !result.success && result.output.includes('971'); attempt++) {
+    onStatus?.('Cloudflare API rate limit reached, waiting 65s before retrying bucket delete...');
     await sleep(65000);
     result = await runCommandWithOutputAsync(`wrangler r2 bucket delete ${bucketName}`);
   }

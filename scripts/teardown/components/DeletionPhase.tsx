@@ -350,10 +350,14 @@ function buildDeletionTasks(
     title: `Delete ${config.bucketName}`,
     group: 'storage',
     skip: () => (options.keepBucket ? 'Bucket preserved (--keep-bucket)' : false),
-    task: async (ctx: DeletionContext) => {
+    task: async (ctx: DeletionContext, report) => {
+      const onProgress = (deleted: number, total: number) =>
+        report(`Emptying bucket: ${deleted.toLocaleString()} / ${total.toLocaleString()} objects`);
+
       // Empty bucket first (required before deletion)
       if (ctx.apiToken && ctx.authInfo.accountId) {
-        await emptyBucket(ctx.config.bucketName, ctx.apiToken, ctx.authInfo.accountId);
+        report('Listing objects...');
+        await emptyBucket(ctx.config.bucketName, ctx.apiToken, ctx.authInfo.accountId, onProgress, report);
       }
 
       // Try to delete bucket, retry if still has content
@@ -361,7 +365,8 @@ function buildDeletionTasks(
       const maxAttempts = 3;
 
       while (attempts < maxAttempts) {
-        const result = await deleteBucket(ctx.config.bucketName);
+        report('Deleting bucket...');
+        const result = await deleteBucket(ctx.config.bucketName, report);
 
         if (result.success) {
           if (!result.notFound) {
@@ -375,7 +380,7 @@ function buildDeletionTasks(
           attempts++;
           if (attempts < maxAttempts && ctx.apiToken && ctx.authInfo.accountId) {
             // Try emptying again
-            await emptyBucket(ctx.config.bucketName, ctx.apiToken, ctx.authInfo.accountId);
+            await emptyBucket(ctx.config.bucketName, ctx.apiToken, ctx.authInfo.accountId, onProgress, report);
           }
         } else {
           // Different error, don't retry

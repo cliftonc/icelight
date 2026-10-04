@@ -10,8 +10,13 @@ export interface SeedOptions {
   ingestApiUrl: string;
   /** Days of history to generate (1-365) */
   days?: number;
-  /** Events per /v1/batch request */
+  /**
+   * Events per /v1/batch request. Basin Pipelines accepts up to 5 MB per
+   * send(); demo events are ~1 KB, so 1,000 per batch leaves plenty of room.
+   */
   batchSize?: number;
+  /** Batch requests in flight at once */
+  concurrency?: number;
   /** Called after each batch is sent */
   onProgress?: (progress: SeedProgress) => void;
 }
@@ -45,15 +50,11 @@ function chunk<T>(array: T[], size: number): T[][] {
   return chunks;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 /**
  * Generate historical demo events and send them to the ingest API
  */
 export async function seedEvents(options: SeedOptions): Promise<SeedResult> {
-  const { ingestApiUrl, days = 30, batchSize = 100, onProgress } = options;
+  const { ingestApiUrl, days = 30, batchSize = 1000, concurrency = 10, onProgress } = options;
   const startTime = Date.now();
 
   // Reuse the query-api event generator (also used by its daily cron)
@@ -66,9 +67,10 @@ export async function seedEvents(options: SeedOptions): Promise<SeedResult> {
   const total = generated.events.length;
   let sent = 0;
   let errors = 0;
+  let completed = 0;
+  let next = 0;
 
-  for (let i = 0; i < batches.length; i++) {
-    const batch = batches[i];
+  const sendBatch = async (batch: unknown[]) => {
     let error: string | undefined;
 
     try {
@@ -88,13 +90,17 @@ export async function seedEvents(options: SeedOptions): Promise<SeedResult> {
     }
 
     if (error) errors++;
-    onProgress?.({ batch: i + 1, totalBatches: batches.length, sent, total, error });
+    completed++;
+    onProgress?.({ batch: completed, totalBatches: batches.length, sent, total, error });
+  };
 
-    // Small delay between batches to avoid overwhelming the API
-    if (i < batches.length - 1) {
-      await sleep(50);
+  const worker = async () => {
+    while (next < batches.length) {
+      await sendBatch(batches[next++]);
     }
-  }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, batches.length) }, worker));
 
   return {
     total,

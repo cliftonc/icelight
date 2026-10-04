@@ -3,9 +3,9 @@
  * Generate historical analytics events and send them to the ingest API
  *
  * Usage:
- *   pnpm generate-events              # Generate 30 days of data, batch size 100
+ *   pnpm generate-events              # Generate 30 days of data, batch size 1000
  *   pnpm generate-events 90           # Generate 90 days of data
- *   pnpm generate-events 30 1000      # Generate 30 days with batch size 1000
+ *   pnpm generate-events 30 500       # Generate 30 days with batch size 500
  *
  * Environment variables:
  *   INGEST_API_URL - URL to the ingest API (default: http://localhost:8787)
@@ -32,15 +32,16 @@ async function main() {
   // Parse command line arguments
   const args = process.argv.slice(2);
   const days = args[0] ? parseInt(args[0], 10) : 30;
-  const batchSize = args[1] ? parseInt(args[1], 10) : 100;
+  const batchSize = args[1] ? parseInt(args[1], 10) : 1000;
 
   if (isNaN(days) || days < 1 || days > 365) {
     log('Error: Days must be a number between 1 and 365', 'red');
     process.exit(1);
   }
 
-  if (isNaN(batchSize) || batchSize < 1 || batchSize > 10000) {
-    log('Error: Batch size must be a number between 1 and 10000', 'red');
+  // Basin Pipelines accepts up to 5 MB per send(); demo events are ~1 KB each
+  if (isNaN(batchSize) || batchSize < 1 || batchSize > 4000) {
+    log('Error: Batch size must be a number between 1 and 4000', 'red');
     process.exit(1);
   }
 

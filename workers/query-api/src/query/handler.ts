@@ -96,8 +96,9 @@ export function createQueryApp(options: QueryAppOptions = {}) {
     const origins = c.env.ALLOWED_ORIGINS?.split(',').map((o: string) => o.trim()) || ['*'];
     const corsMiddleware = cors({
       origin: origins.includes('*') ? '*' : origins,
-      allowMethods: ['GET', 'POST', 'OPTIONS'],
-      allowHeaders: ['Content-Type', 'Authorization'],
+      allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Authorization', 'X-Cache-Control', 'MCP-Protocol-Version', 'Mcp-Session-Id'],
+      exposeHeaders: ['MCP-Protocol-Version', 'Mcp-Session-Id'],
       maxAge: 86400,
     });
     return corsMiddleware(c, next);
@@ -135,8 +136,8 @@ export function createQueryApp(options: QueryAppOptions = {}) {
     return handleIngestProxy(c);
   });
 
-  // Mount cube API routes
-  app.all('/cubejs-api/*', async (c) => {
+  // Mount cube API routes (Cube.js-compatible API and drizzle-cube's MCP server)
+  const handleCube = async (c: QueryContext) => {
     // Build cache config at runtime if KV binding is available
     let cacheConfig: CacheConfig | undefined;
     if (options.cache && c.env.CACHE) {
@@ -151,7 +152,10 @@ export function createQueryApp(options: QueryAppOptions = {}) {
       };
     }
     return handleCubeRequest(c, cubes, cacheConfig);
-  });
+  };
+  app.all('/cubejs-api/*', handleCube);
+  app.all('/mcp', handleCube);
+  app.all('/mcp/*', handleCube);
 
   return app;
 }
@@ -334,6 +338,8 @@ async function handleCubeRequest(c: QueryContext, cubes: Cube[], cacheConfig?: C
   const cubeApp = createCubeApp({
     semanticLayer,
     extractSecurityContext: async () => ({}),
+    // MCP server at /mcp, plus the interactive MCP app
+    mcp: { enabled: true, app: true },
   });
 
   // Forward request to cube app

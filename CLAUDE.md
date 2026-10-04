@@ -91,9 +91,9 @@ pnpm dev:ingest
 # Run query worker locally
 pnpm dev:query
 
-# Deploy workers
-pnpm deploy:ingest
-pnpm deploy:query
+# Redeploy after code changes (uses existing wrangler.local.jsonc, no infra changes)
+pnpm deploy:query    # Query API + UI (builds the UI first) - most common
+pnpm deploy:ingest   # Event ingest worker
 pnpm deploy:all
 
 # Infrastructure
@@ -103,6 +103,23 @@ pnpm teardown   # Delete infrastructure
 # Demo data
 INGEST_API_URL=<ingest url> pnpm generate-events [days] [batchSize]
 ```
+
+### Redeploying vs relaunching
+
+- **Code changes only** (query API, UI, dashboards, cubes, ingest handler): `pnpm deploy:query` / `pnpm deploy:ingest`. Fast, touches nothing else.
+- **Missing or broken infrastructure / regenerate `wrangler.local.jsonc`**: `pnpm launch` (idempotent - skips resources that exist, prompts before redeploying workers).
+- **Schema or pipeline changes**: `pnpm teardown && pnpm launch` (streams, sinks and pipeline SQL are immutable). Teardown deletes all event data unless `--keep-bucket`.
+- **Default dashboard** (`workers/query-api/src/dashboards/default-dashboard.ts`) is stored in D1: redeploying doesn't change an existing copy. Refresh it from the UI, or wait for the daily cron (02:00 UTC) which re-saves it.
+- **Custom domain**: set `ICELIGHT_QUERY_DOMAIN` in `.env`; launch adds it as a Workers custom domain (and keeps workers.dev enabled).
+
+### Query API surfaces
+
+- `POST /query` - Basin SQL
+- `/cubejs-api/v1/*` - drizzle-cube semantic API (dashboards, Analysis Builder)
+- `/mcp` - drizzle-cube MCP server (tools: discover, validate, load, chart)
+- `/api/dashboards` - D1 dashboard storage
+
+To check semantic-layer queries against a deployed worker, call `/cubejs-api/v1/load?query=<url-encoded JSON>` with header `X-Cache-Control: no-cache` (bypasses the KV result cache).
 
 ## Tech Stack
 
@@ -300,6 +317,10 @@ Cloudflare Basin has been GA since 2026-10-01 and is billed per use ([pricing](h
 - No `OFFSET` (emulated in `basin-drizzle.ts`), `UNNEST`, `PIVOT`, `LATERAL`; no bound parameters (inlined in `basin-drizzle.ts`)
 - Default `LIMIT 500`; billed at $2.50/TB compressed bytes scanned (10 MB minimum per query)
 - REST: `POST https://api.sql.cloudflarestorage.com/api/v1/accounts/<account-id>/basin-sql/query/<bucket>` with `{ warehouse, query }`
+- drizzle-cube runs on Basin SQL via its `postgres` adapter. Known limits for flow (user journey) queries:
+  - Set `joinStrategy: "window"` - the default (`auto`) uses `LATERAL`, which Basin rejects
+  - Keep `stepsBefore + stepsAfter` small (2 + 3 works) - deeper flows hit "query expression too deep"
+  - Don't set `entityLimit` - it triggers a Basin planner error ("partition 1 not available")
 
 ### Wrangler Commands Reference
 

@@ -2,6 +2,7 @@
  * Storage resource deletion operations (KV, D1, R2)
  */
 
+import { createR2S3Client, bulkDeleteObjectsS3, abortMultipartUploads } from './r2-s3.js';
 import { runCommandWithOutputAsync, runQuietAsync } from '../core/index.js';
 import type { DeletionResult } from './workers.js';
 
@@ -207,12 +208,33 @@ export async function emptyBucket(
   onStatus?: StatusCallback
 ): Promise<{ success: boolean; deletedCount: number; failedCount: number }> {
   const objects = await listBucketObjects(bucketName, apiToken, accountId);
+  const s3 = await createR2S3Client(bucketName, apiToken, accountId);
+
+  // Incomplete multipart uploads (e.g. a pipeline sink deleted mid-write) are
+  // invisible to object listings but still block bucket deletion
+  if (s3) {
+    onStatus?.('Aborting incomplete multipart uploads...');
+    try {
+      await abortMultipartUploads(s3);
+    } catch (err) {
+      onStatus?.(`Could not abort multipart uploads: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 
   if (objects.length === 0) {
     return { success: true, deletedCount: 0, failedCount: 0 };
   }
 
-  const { deleted, failed } = await deleteObjects(bucketName, objects, apiToken, accountId, onProgress, onStatus);
+  // Prefer S3 bulk deletes (1,000 per request); fall back to per-object REST deletes
+  let { deleted, failed } = s3
+    ? await bulkDeleteObjectsS3(s3, objects, onProgress)
+    : { deleted: 0, failed: objects.length };
+  if (!s3 || failed > 0) {
+    const remaining = s3 ? await listBucketObjects(bucketName, apiToken, accountId) : objects;
+    const rest = await deleteObjects(bucketName, remaining, apiToken, accountId, onProgress, onStatus);
+    deleted += rest.deleted;
+    failed = rest.failed;
+  }
 
   // Some deletes failed - retry what's left via wrangler
   if (failed > 0) {

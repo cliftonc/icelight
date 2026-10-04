@@ -257,3 +257,72 @@ export async function deleteBucket(bucketName: string, onStatus?: StatusCallback
 
   return { success: false, notFound: false, error: result.output };
 }
+
+/**
+ * Drop all Basin Catalog tables and namespaces for a bucket via the Iceberg REST API.
+ *
+ * Catalog metadata outlives the bucket's objects (and the bucket itself), and a
+ * Basin Catalog sink cannot write to an existing table, so a later `pnpm launch`
+ * would fail to create its sink unless these are removed.
+ */
+export async function dropCatalogTables(
+  bucketName: string,
+  apiToken: string,
+  accountId: string,
+  onStatus?: StatusCallback
+): Promise<{ success: boolean; dropped: string[]; error?: string }> {
+  const catalogUri = `https://catalog.cloudflarestorage.com/${accountId}/${bucketName}`;
+  const warehouse = `${accountId}_${bucketName}`;
+  const headers = { Authorization: `Bearer ${apiToken}` };
+  const dropped: string[] = [];
+
+  const configResponse = await fetch(`${catalogUri}/v1/config?warehouse=${encodeURIComponent(warehouse)}`, { headers });
+  if (configResponse.status === 404) {
+    // Catalog not enabled (or bucket gone) - nothing to drop
+    return { success: true, dropped };
+  }
+  if (!configResponse.ok) {
+    return { success: false, dropped, error: `Catalog config request failed: ${configResponse.status} ${await configResponse.text()}` };
+  }
+
+  const config = (await configResponse.json()) as { overrides?: { prefix?: string }; defaults?: { prefix?: string } };
+  const prefix = config.overrides?.prefix ?? config.defaults?.prefix;
+  const base = prefix ? `${catalogUri}/v1/${prefix}` : `${catalogUri}/v1`;
+
+  const namespacesResponse = await fetch(`${base}/namespaces`, { headers });
+  if (!namespacesResponse.ok) {
+    return { success: false, dropped, error: `Listing catalog namespaces failed: ${namespacesResponse.status} ${await namespacesResponse.text()}` };
+  }
+  const { namespaces = [] } = (await namespacesResponse.json()) as { namespaces?: string[][] };
+
+  for (const namespace of namespaces) {
+    // Multi-level namespaces are joined with the unit separator in REST paths
+    const ns = encodeURIComponent(namespace.join('\x1f'));
+    const tablesResponse = await fetch(`${base}/namespaces/${ns}/tables`, { headers });
+    if (!tablesResponse.ok) {
+      return { success: false, dropped, error: `Listing tables in ${namespace.join('.')} failed: ${tablesResponse.status}` };
+    }
+    const { identifiers = [] } = (await tablesResponse.json()) as { identifiers?: Array<{ name: string }> };
+
+    for (const { name } of identifiers) {
+      const tableName = `${namespace.join('.')}.${name}`;
+      onStatus?.(`Dropping catalog table ${tableName}...`);
+      const dropResponse = await fetch(
+        `${base}/namespaces/${ns}/tables/${encodeURIComponent(name)}?purgeRequested=true`,
+        { method: 'DELETE', headers }
+      );
+      if (!dropResponse.ok && dropResponse.status !== 404) {
+        return { success: false, dropped, error: `Dropping ${tableName} failed: ${dropResponse.status} ${await dropResponse.text()}` };
+      }
+      dropped.push(tableName);
+    }
+
+    onStatus?.(`Dropping catalog namespace ${namespace.join('.')}...`);
+    const nsResponse = await fetch(`${base}/namespaces/${ns}`, { method: 'DELETE', headers });
+    if (!nsResponse.ok && nsResponse.status !== 404) {
+      return { success: false, dropped, error: `Dropping namespace ${namespace.join('.')} failed: ${nsResponse.status} ${await nsResponse.text()}` };
+    }
+  }
+
+  return { success: true, dropped };
+}

@@ -9,6 +9,7 @@ import Spinner from 'ink-spinner';
 import { StepFlow, FlowTaskDefinition, FlowGroupDefinition } from '../../shared/components/index.js';
 import type { Config, AuthInfo, ExistingResources } from '../core/types.js';
 import { checkExistingResources, getResourcesNeeded, getCatalogInfo } from '../steps/resources.js';
+import { formatCommandError } from '../core/wrangler.js';
 import {
   createBucket,
   enableCatalog,
@@ -218,20 +219,20 @@ function buildInfrastructureTasks(
     group: 'storage',
     skip: () => (!needs.needsBucket ? 'Already exists' : false),
     task: async (ctx: InfrastructureContext) => {
-      const success = await createBucket(ctx.config.bucketName);
-      if (!success) throw new Error('Failed to create R2 bucket');
+      const result = await createBucket(ctx.config.bucketName);
+      if (!result.success) throw formatCommandError('Failed to create R2 bucket', result.output);
       ctx.resources.bucket = true;
     },
   });
 
   tasks.push({
     key: 'catalog',
-    title: 'Enable Data Catalog',
+    title: 'Enable Basin Catalog',
     group: 'storage',
     skip: () => (!needs.needsCatalog ? 'Already enabled' : false),
     task: async (ctx: InfrastructureContext) => {
-      const success = await enableCatalog(ctx.config.bucketName);
-      if (!success) throw new Error('Failed to enable Data Catalog');
+      const result = await enableCatalog(ctx.config.bucketName);
+      if (!result.success) throw formatCommandError('Failed to enable Basin Catalog', result.output);
       ctx.resources.catalogEnabled = true;
     },
   });
@@ -243,8 +244,8 @@ function buildInfrastructureTasks(
     group: 'pipeline',
     skip: () => (!needs.needsStream ? 'Already exists' : false),
     task: async (ctx: InfrastructureContext) => {
-      const success = await createStream(ctx.config.streamName);
-      if (!success) throw new Error('Failed to create stream');
+      const result = await createStream(ctx.config.streamName);
+      if (!result.success) throw formatCommandError('Failed to create stream', result.output);
       ctx.resources.stream.exists = true;
     },
   });
@@ -255,8 +256,14 @@ function buildInfrastructureTasks(
     group: 'pipeline',
     skip: () => (!needs.needsSink ? 'Already exists' : false),
     task: async (ctx: InfrastructureContext) => {
-      const success = await createSink(ctx.config.sinkName, ctx.config.bucketName, ctx.apiToken);
-      if (!success) throw new Error('Failed to create sink');
+      const result = await createSink(ctx.config.sinkName, ctx.config.bucketName, ctx.apiToken);
+      if (!result.success) {
+        const error = formatCommandError('Failed to create sink', result.output, [ctx.apiToken]);
+        if (result.output.includes('existing Catalog tables')) {
+          error.message += '\n\nThe analytics.events table already exists in Basin Catalog (left over from a previous deployment). Run `pnpm teardown` to remove it, then launch again.';
+        }
+        throw error;
+      }
       ctx.resources.sink.exists = true;
     },
   });
@@ -267,8 +274,8 @@ function buildInfrastructureTasks(
     group: 'pipeline',
     skip: () => (!needs.needsPipeline ? 'Already exists' : false),
     task: async (ctx: InfrastructureContext) => {
-      const success = await createPipeline(ctx.config.pipelineName, ctx.config.sinkName, ctx.config.streamName);
-      if (!success) throw new Error('Failed to create pipeline');
+      const result = await createPipeline(ctx.config.pipelineName, ctx.config.sinkName, ctx.config.streamName);
+      if (!result.success) throw formatCommandError('Failed to create pipeline', result.output);
       ctx.resources.pipeline.exists = true;
     },
   });
@@ -281,7 +288,8 @@ function buildInfrastructureTasks(
     skip: () => (!needs.needsKvCache ? 'Already exists' : false),
     task: async (ctx: InfrastructureContext) => {
       const result = await createKvNamespace(ctx.config.kvCacheName);
-      if (result.success && result.id) {
+      if (!result.success) throw formatCommandError('Failed to create KV namespace', result.output);
+      if (result.id) {
         ctx.resources.kvCache.exists = true;
         ctx.resources.kvCache.id = result.id;
       }
@@ -295,7 +303,8 @@ function buildInfrastructureTasks(
     skip: () => (!needs.needsKvCachePreview ? 'Already exists' : false),
     task: async (ctx: InfrastructureContext) => {
       const result = await createKvPreviewNamespace(ctx.config.kvCacheName);
-      if (result.success && result.id) {
+      if (!result.success) throw formatCommandError('Failed to create KV preview namespace', result.output);
+      if (result.id) {
         ctx.resources.kvCache.previewId = result.id;
       }
     },
@@ -308,7 +317,8 @@ function buildInfrastructureTasks(
     skip: () => (!needs.needsD1Database ? 'Already exists' : false),
     task: async (ctx: InfrastructureContext) => {
       const result = await createD1Database(ctx.config.d1DatabaseName);
-      if (result.success && result.id) {
+      if (!result.success) throw formatCommandError('Failed to create D1 database', result.output);
+      if (result.id) {
         ctx.resources.d1Database.exists = true;
         ctx.resources.d1Database.id = result.id;
       }

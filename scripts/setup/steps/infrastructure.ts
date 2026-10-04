@@ -8,33 +8,33 @@ import { runCommandAsync, runCommandWithOutputAsync, getSchemaPath } from '../co
 /**
  * Create R2 bucket (async for spinner animation)
  */
-export async function createBucket(bucketName: string): Promise<boolean> {
-  return runCommandAsync(`wrangler r2 bucket create ${bucketName}`);
+export async function createBucket(bucketName: string): Promise<CommandResult> {
+  return runCommandWithOutputAsync(`wrangler r2 bucket create ${bucketName}`);
 }
 
 /**
  * Enable Basin Catalog for bucket (async for spinner animation)
  */
-export async function enableCatalog(bucketName: string): Promise<boolean> {
-  return runCommandAsync(`wrangler basin catalog enable ${bucketName}`);
+export async function enableCatalog(bucketName: string): Promise<CommandResult> {
+  return runCommandWithOutputAsync(`wrangler basin catalog enable ${bucketName}`);
 }
 
 /**
  * Create stream with schema (async for spinner animation)
  */
-export async function createStream(streamName: string): Promise<boolean> {
+export async function createStream(streamName: string): Promise<CommandResult> {
   const schemaPath = getSchemaPath();
   const cmd = `wrangler basin pipelines streams create ${streamName} ` +
     `--schema-file "${schemaPath}" ` +
     `--http-enabled true ` +
     `--http-auth false`;
-  return runCommandAsync(cmd);
+  return runCommandWithOutputAsync(cmd);
 }
 
 /**
  * Create sink for Basin Catalog (Iceberg) (async for spinner animation)
  */
-export async function createSink(sinkName: string, bucketName: string, apiToken: string): Promise<boolean> {
+export async function createSink(sinkName: string, bucketName: string, apiToken: string): Promise<CommandResult> {
   const cmd = `wrangler basin pipelines sinks create ${sinkName} ` +
     // Basin docs also list `basin-catalog`, but wrangler only accepts `r2-data-catalog` so far
     `--type r2-data-catalog ` +
@@ -43,16 +43,16 @@ export async function createSink(sinkName: string, bucketName: string, apiToken:
     `--table events ` +
     `--roll-interval 60 ` + // Minimum for Basin Catalog sinks
     `--catalog-token "${apiToken}"`;
-  return runCommandAsync(cmd);
+  return runCommandWithOutputAsync(cmd);
 }
 
 /**
  * Create pipeline connecting stream to sink (async for spinner animation)
  */
-export async function createPipeline(pipelineName: string, sinkName: string, streamName: string): Promise<boolean> {
+export async function createPipeline(pipelineName: string, sinkName: string, streamName: string): Promise<CommandResult> {
   const cmd = `wrangler basin pipelines create ${pipelineName} ` +
     `--sql "INSERT INTO ${sinkName} SELECT * FROM ${streamName}"`;
-  return runCommandAsync(cmd);
+  return runCommandWithOutputAsync(cmd);
 }
 
 /**
@@ -114,7 +114,7 @@ export async function createInfrastructure(
 
   // Create bucket if needed
   if (!resources.bucket) {
-    const success = await createBucket(config.bucketName);
+    const { success } = await createBucket(config.bucketName);
     report('bucket', success);
     if (success) updated.bucket = true;
     else return updated;
@@ -122,7 +122,7 @@ export async function createInfrastructure(
 
   // Enable catalog if needed
   if (!resources.catalogEnabled) {
-    const success = await enableCatalog(config.bucketName);
+    const { success } = await enableCatalog(config.bucketName);
     report('catalog', success);
     if (success) updated.catalogEnabled = true;
     else return updated;
@@ -130,7 +130,7 @@ export async function createInfrastructure(
 
   // Create stream if needed
   if (!resources.stream.exists) {
-    const success = await createStream(config.streamName);
+    const { success } = await createStream(config.streamName);
     report('stream', success);
     if (success) updated.stream.exists = true;
     else return updated;
@@ -138,7 +138,7 @@ export async function createInfrastructure(
 
   // Create sink if needed
   if (!resources.sink.exists) {
-    const success = await createSink(config.sinkName, config.bucketName, apiToken);
+    const { success } = await createSink(config.sinkName, config.bucketName, apiToken);
     report('sink', success);
     if (success) updated.sink.exists = true;
     else return updated;
@@ -146,7 +146,7 @@ export async function createInfrastructure(
 
   // Create pipeline if needed
   if (!resources.pipeline.exists) {
-    const success = await createPipeline(config.pipelineName, config.sinkName, config.streamName);
+    const { success } = await createPipeline(config.pipelineName, config.sinkName, config.streamName);
     report('pipeline', success);
     if (success) updated.pipeline.exists = true;
     else return updated;

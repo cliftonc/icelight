@@ -13,7 +13,7 @@ import { getWorkerNamesList, getContainerNamesList, getLocalConfigPathsList } fr
 import { deleteWorker } from '../steps/workers.js';
 import { deleteContainer } from '../steps/containers.js';
 import { deletePipeline, deleteSink, deleteStream } from '../steps/pipeline.js';
-import { deleteKvNamespace, deleteD1Database, emptyBucket, deleteBucket } from '../steps/storage.js';
+import { deleteKvNamespace, deleteD1Database, emptyBucket, deleteBucket, dropCatalogTables } from '../steps/storage.js';
 import { deleteLocalConfigs } from '../steps/local-files.js';
 
 /**
@@ -341,6 +341,27 @@ function buildDeletionTasks(
           ctx.updateDeleted(() => ({ d1Database: true }));
         }
       }
+    },
+  });
+
+  // Basin Catalog tables (group: storage) - catalog metadata outlives the bucket,
+  // and a new sink can't write to an existing table
+  tasks.push({
+    key: 'catalog-tables',
+    title: 'Drop Basin Catalog tables',
+    group: 'storage',
+    skip: (ctx: DeletionContext) => {
+      if (options.keepBucket) return 'Data preserved (--keep-bucket)';
+      if (!ctx.apiToken || !ctx.authInfo.accountId) return 'No API token in .env';
+      return false;
+    },
+    task: async (ctx: DeletionContext, report) => {
+      report('Looking up catalog tables...');
+      const result = await dropCatalogTables(ctx.config.bucketName, ctx.apiToken, ctx.authInfo.accountId!, report);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to drop Basin Catalog tables');
+      }
+      report(result.dropped.length > 0 ? `Dropped ${result.dropped.join(', ')}` : 'No tables found');
     },
   });
 

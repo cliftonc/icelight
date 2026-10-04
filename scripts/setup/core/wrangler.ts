@@ -356,3 +356,29 @@ export async function findBasinResourceId(kind: BasinResourceKind, name: string)
   }
   return parseBasinList(output).find((item) => item.name === name)?.id ?? null;
 }
+
+/**
+ * Build a readable error from failed wrangler output.
+ *
+ * Strips ANSI colours and wrangler's banner, keeps the [ERROR] lines (or the
+ * last few lines if there are none) and the "Logs were written to" path, and
+ * redacts any secrets passed in.
+ */
+export function formatCommandError(action: string, output: string, secrets: string[] = []): Error {
+  let text = output.replace(/\x1b\[[0-9;]*m/g, '');
+  for (const secret of secrets) {
+    if (secret) text = text.split(secret).join('<redacted>');
+  }
+
+  const lines = text
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim() && !line.includes('⛅️ wrangler') && !/^─+$/.test(line.trim()));
+
+  const errorIndex = lines.findIndex((line) => line.includes('[ERROR]') || line.includes('✘'));
+  const detail = errorIndex === -1 ? lines.slice(-8) : lines.slice(errorIndex, errorIndex + 8);
+  const logLine = lines.find((line) => line.includes('Logs were written to'));
+  if (logLine && !detail.includes(logLine)) detail.push(logLine);
+
+  return new Error(detail.length > 0 ? `${action}\n\n${detail.join('\n')}` : action);
+}

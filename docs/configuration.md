@@ -164,7 +164,7 @@ Notes:
 
 - Older dashboards, and the API permission group names, call these **Workers R2 Data Catalog** and **Workers R2 SQL**. They're the same permissions.
 - Don't use an R2 token from **R2 → Manage API tokens**. It covers Basin Catalog, Basin SQL and storage, but not **Workers Scripts**.
-- Wrangler creates the pipelines and deploys the workers with your `wrangler login` session, so the token doesn't need Pipelines or Workers Scripts Edit permissions.
+- No **Basin Pipelines** permission is needed. Wrangler creates the stream, sink and pipeline, and deploys the workers, with your `wrangler login` session, not this token. The ingest worker writes through the stream binding, which needs no token. (If your shell exports `CLOUDFLARE_API_TOKEN`, wrangler uses that token instead of your login, so that token needs Basin Pipelines Edit plus Workers, KV and D1 edit permissions.)
 
 ## Custom Domain
 

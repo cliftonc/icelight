@@ -56,5 +56,8 @@ export function getTokenRequirements(): string[] {
     '',
     'Older dashboards label Basin Catalog / Basin SQL as',
     '"Workers R2 Data Catalog" / "Workers R2 SQL" — same permissions.',
+    '',
+    'No Basin Pipelines permission is needed: pipelines are created and workers',
+    'deployed with your `wrangler login` session, not this token.',
   ];
 }
